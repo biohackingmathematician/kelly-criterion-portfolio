@@ -137,7 +137,7 @@ A structured checklist for reproducing and extending the methodology, experiment
   - [x] Implement **Kelly Criterion theory**: continuous-time Kelly approximation Function (Anlytical)
   - [x] Implement **Modern Portfolio Theory**: Min-Variance/Markovitz (Anlytical)
   - [x] Implement **Equal Weights Calculation**
-  - [] Implement **Tangent Portfolio Opt** (Bashir)
+  - [x] Implement **Tangent Portfolio Opt** (Bashir)
 - [x] Add **fractional Kelly scaling** parameter (e.g., ½-Kelly, ⅓-Kelly)
 - [ ] Implement **simulation of GBM returns** for synthetic tests
 - [x] Prepare **data ingestion** for EuroStoxx50 historical returns
@@ -157,8 +157,8 @@ A structured checklist for reproducing and extending the methodology, experiment
   - [ ] Use daily returns of one stock (e.g., Banca Intesa)
   - [ ] Backtest Full, Double, Triple, Fractional Kelly
 - [ ] **Portfolio experiments** 
-  - [ ] Construct in-sample constrained Kelly portfolio (Figure 5) (Bashir)
-  - [ ] Compare with tangent, min-variance, and equal-weight portfolios
+  - [x] Construct in-sample constrained Kelly portfolio (Figure 5) (Bashir)
+  - [x] Compare with tangent, min-variance, and equal-weight portfolios (Bashir)
   - [ ] Perform **rolling (out-of-sample)** tests with: (Pranav)
     - [x] 24 lookback windows
     - [ ] Multiple lookback windows (e.g., 24, 36, 60, 108 months)
