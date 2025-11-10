@@ -137,7 +137,7 @@ A structured checklist for reproducing and extending the methodology, experiment
   - [x] Implement **Kelly Criterion theory**: continuous-time Kelly approximation Function (Anlytical)
   - [x] Implement **Modern Portfolio Theory**: Min-Variance/Markovitz (Anlytical)
   - [x] Implement **Equal Weights Calculation**
-  - [ ] Implement **Tangent Portfolio Opt** (Bashir)
+  - [x] Implement **Tangent Portfolio Opt** (Bashir)
 - [x] Add **fractional Kelly scaling** parameter (e.g., ½-Kelly, ⅓-Kelly)
 - [ ] Implement **simulation of GBM returns** for synthetic tests
 - [x] Prepare **data ingestion** for EuroStoxx50 historical returns
