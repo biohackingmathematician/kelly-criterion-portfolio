@@ -154,17 +154,12 @@ A structured checklist for reproducing and extending the methodology, experiment
   - [x] Plot E[log W_T] over time (Figure 2)
   - [x] Results match Carta & Conversano (2020) Section 3.1
 - [ ] **Single-equity study** (Bashir)
-  - [ ] Use daily returns of one stock (e.g., Banca Intesa)
-  - [ ] Backtest Full, Double, Triple, Fractional Kelly
-- [ ] **Portfolio experiments** 
+  - [ ] Use daily returns of one stock (e.g., Banca Intesa) (Bashir)
+  - [ ] Backtest Full, Double, Triple, Fractional Kelly (Bashir)
+- [x] **Portfolio experiments** (Bashir)
   - [x] Construct in-sample constrained Kelly portfolio (Figure 5) (Bashir)
   - [x] Compare with tangent, min-variance, and equal-weight portfolios (Bashir)
-  - [ ] Perform **rolling (out-of-sample)** tests with: (Pranav)
-    - [x] 24 lookback windows
-    - [ ] Multiple lookback windows (e.g., 24, 36, 60, 108 months)
-    - [ ] Multiple rebalancing frequencies (daily, weekly, monthly)
 - [x] Record all metrics in tabular format (mean, median, CAGR, drawdown)
-- [ ] **Sensitivity Analysis** (Bashir/Pranav)
 
 
 ---
@@ -180,8 +175,7 @@ A structured checklist for reproducing and extending the methodology, experiment
 - [ ] Summarize all results in tables:
   - [ ] Monte-Carlo statistics
   - [ ] Single-asset performance metrics
-  - [ ] In-sample vs out-of-sample portfolio metrics
-  - [ ] Sensitivity analysis (lookback × rebalancing)
+  - [ ] In-sample portfolio metrics
 - [ ] Interpret:
   - [ ] Kelly asymptotic optimality
   - [ ] Over-betting risk and ruin probability
@@ -190,10 +184,9 @@ A structured checklist for reproducing and extending the methodology, experiment
 
 ---
 
-### Extensions & Future Work
+### Extensions
 
-- [ ] Pending
-
+- [ ] Essay on Defecits/Holes that thwarted reproducibility (Bashir)
 
 ## Repository Structure
 
