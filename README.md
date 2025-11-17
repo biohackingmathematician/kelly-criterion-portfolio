@@ -153,9 +153,9 @@ A structured checklist for reproducing and extending the methodology, experiment
   - [x] Compute mean, median, std, and ruin probabilities
   - [x] Plot E[log W_T] over time (Figure 2)
   - [x] Results match Carta & Conversano (2020) Section 3.1
-- [ ] **Single-equity study** (Bashir)
-  - [ ] Use daily returns of one stock (e.g., Banca Intesa) (Bashir)
-  - [ ] Backtest Full, Double, Triple, Fractional Kelly (Bashir)
+- [x] **Single-equity study** (Bashir)
+  - [x] Use daily returns of one stock (e.g., Banca Intesa) (Bashir)
+  - [x] Backtest Full, Double, Triple, Fractional Kelly (Bashir)
 - [x] **Portfolio experiments** (Bashir)
   - [x] Construct in-sample constrained Kelly portfolio (Figure 5) (Bashir)
   - [x] Compare with tangent, min-variance, and equal-weight portfolios (Bashir)
