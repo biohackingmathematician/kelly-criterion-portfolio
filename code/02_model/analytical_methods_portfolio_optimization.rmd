@@ -1,0 +1,507 @@
+---
+title: "Analytical Derivation of Portfolio Optimization Methods"
+subtitle: "Comprehensive Reproduction of Analytical Methods from Carta & Conversano (2020)"
+author: "Syed Bashir Hydari"
+format: 
+  pdf:
+    toc: true
+    number-sections: true
+---
+
+# Introduction
+
+This document provides a comprehensive analytical (mathematical) derivation of **four portfolio optimization methods**:
+
+1. **Kelly Criterion Portfolio** - Maximizes long-term geometric growth
+2. **Tangent Portfolio** - Maximizes Sharpe ratio (equivalent to Kelly under continuous-time approximation)
+3. **Minimum Variance Portfolio (Markowitz)** - Minimizes portfolio risk
+4. **Equal Weights Portfolio** - Naive diversification benchmark
+
+The Kelly Criterion and Tangent Portfolio derivations follow Carta & Conversano (2020), Section 2.2.2-2.2.3.  The Minimum Variance and Equal Weights methods are standard results from Modern Portfolio Theory.
+
+# Kelly Criterion: Single Asset Derivation
+
+## Objective Function (Equation 3)
+
+For a financial asset with continuous probability distribution, the goal is to maximize:
+
+$$g(f) = E[\log(1 + fx)] = \int \log(1 + fx) dP(x)$$
+
+where:
+
+- $f$ = fraction of invested capital
+- $x$ = outcome (return) of the investment
+- $P(x)$ = probability measure for the outcome
+- Constraint: $1 + fx > 0$ to avoid undefined logarithms
+
+## Assumptions
+
+Assume outcomes $x$ are distributed as a symmetric random variable around $E(x) = \mu$ with $Var(x) = \sigma^2$:
+
+$$\Pr(x = \mu + \sigma) = \Pr(x = \mu - \sigma) = 0. 5$$
+
+## Wealth Dynamics
+
+The wealth after investing fraction $f$ is:
+
+$$W(f) = W_0[1 + (1-f)r + fx] = W_0[1 + r + f(x - r)]$$
+
+where $r$ is the risk-free rate. 
+
+## Expected Growth Rate
+
+$$g(f) = E[G(f)] = E\left[\log\frac{W(f)}{W_0}\right] = E\{\log[1 + r + f(x-r)]\}$$
+
+Expanding:
+$$= 0.5\log[1 + r + f(\mu + \sigma - r)] + 0.5\log[1 + r + f(\mu - \sigma - r)]$$
+
+## Taylor Approximation (Equation 5)
+
+Dividing time into $n$ sub-intervals, the growth rate becomes:
+
+$$g_n(f) = nE\left[\log\left(1 + \frac{r}{n} + f\left(\frac{\mu}{n} + \frac{U\sigma}{\sqrt{n}} - \frac{r}{n}\right)\right)\right]$$
+
+where $U = \pm 1$ is a symmetric Bernoulli random variable.
+
+Using the expansion $\log(1 + u) = u - \frac{u^2}{2} + O(u^3)$ when $u \to 0$:
+
+$$\frac{g_n(f)}{n} = \frac{r}{n} + f\left(\frac{\mu}{n} + E(U)\frac{\sigma}{\sqrt{n}} - \frac{r}{n}\right) - \frac{f^2\sigma^2 E(U^2)}{2n} + O\left(n^{-\frac{3}{2}}\right)$$
+
+## Continuous Time Limit (Equation 7)
+
+Since $E(U) = 0$ and $E(U^2) = 1$:
+
+$$\frac{g_n(f)}{n} = \frac{r}{n} + f\left(\frac{\mu}{n} - \frac{r}{n}\right) - \frac{f^2\sigma^2}{2n} + O\left(n^{-\frac{3}{2}}\right)$$
+
+Simplifying:
+$$= r + f(\mu - r) - \frac{f^2\sigma^2}{2} + O\left(n^{-\frac{1}{2}}\right)$$
+
+As $n \to \infty$, $O(n^{-\frac{1}{2}}) \to 0$, giving **Equation (8)**:
+
+$$\boxed{g_{\infty}(f) = r + f(\mu - r) - \frac{f^2\sigma^2}{2}}$$
+
+## Optimal Kelly Fraction (Equation 9)
+
+To maximize $g_{\infty}(f)$, take the first derivative:
+
+$$\frac{dg_{\infty}}{df} = (\mu - r) - f\sigma^2 = 0$$
+
+Solving for $f$:
+
+$$\boxed{f^* = \frac{\mu - r}{\sigma^2}}$$
+
+This is the **optimal Kelly fraction for a single asset**.
+
+## Second-Order Condition
+
+$$\frac{d^2g_{\infty}}{df^2} = -\sigma^2 < 0$$
+
+Since the second derivative is negative, $f^*$ is a **maximum**. 
+
+# Kelly Criterion: Multi-Asset Extension
+
+## Problem Setup
+
+Consider:
+
+- $n$ risky assets with expected returns $M = (\mu_1, \ldots, \mu_n)^T$
+- Variance-covariance matrix $\Sigma$ with elements $\Sigma_{ij} = E[(r_i - \mu_i)(r_j - \mu_j)]$
+- Portfolio weights $F = (f_1, \ldots, f_n)^T$
+- Risk-free rate $r$, with vector $R = (r, \ldots, r)^T$
+
+## Portfolio Return and Variance
+
+Portfolio expected return:
+$$\mu_p = f_0 r + \sum_{i=1}^{n} f_i \mu_i = r + F^T(M - R)$$
+
+where $f_0 = 1 - \sum_{i=1}^{n} f_i$ is the fraction in the risk-free asset.
+
+Portfolio variance:
+$$\sigma_p^2 = F^T \Sigma F$$
+
+## Multi-Asset Growth Rate (Equation 11)
+
+Following Thorp [8], as cited in Carta & Conversano (2020), the single-asset growth rate formula extends to the multi-asset case.  For a portfolio of securities with continuous probability distributions:
+
+$$\boxed{g_{\infty}(f_1, \ldots, f_n) = r + F^T(M - R) - \frac{F^T \Sigma F}{2}}$$
+
+This is **Equation (11)** in the paper.  Note that this is a **stated result** from Thorp's work, not derived by Carta & Conversano.
+
+## Special Case: Uncorrelated Assets
+
+When assets are uncorrelated, $\Sigma$ is diagonal:
+
+$$\Sigma = \begin{pmatrix}
+\sigma_1^2 & 0 & \cdots & 0 \\
+0 & \sigma_2^2 & \cdots & 0 \\
+\vdots & \vdots & \ddots & \vdots \\
+0 & 0 & \cdots & \sigma_n^2
+\end{pmatrix}$$
+
+Then:
+$$\Sigma^{-1} = \begin{pmatrix}
+1/\sigma_1^2 & 0 & \cdots & 0 \\
+0 & 1/\sigma_2^2 & \cdots & 0 \\
+\vdots & \vdots & \ddots & \vdots \\
+0 & 0 & \cdots & 1/\sigma_n^2
+\end{pmatrix}$$
+
+The optimal weight for each asset reduces to the single-asset case:
+
+$$\boxed{f_i^* = \frac{\mu_i - r}{\sigma_i^2}}$$
+
+# Tangent Portfolio (Maximum Sharpe Ratio)
+
+## Objective
+
+The tangent portfolio maximizes the expected growth rate (equivalent to maximizing Sharpe ratio):
+
+$$\max_F \left[r + F^T(M - R) - \frac{F^T \Sigma F}{2}\right]$$
+
+This is identical to maximizing:
+
+$$\max_F \frac{\mu_p - r}{\sigma_p} = \frac{F^T(M-R)}{\sqrt{F^T \Sigma F}}$$
+
+## First-Order Condition
+
+Take the gradient with respect to $F$:
+
+$$\nabla_F g_{\infty}(F) = \frac{\partial}{\partial F}\left[r + F^T(M - R) - \frac{1}{2}F^T \Sigma F\right]$$
+
+Using matrix calculus:
+
+- $\frac{\partial}{\partial F}(F^T(M-R)) = M - R$
+- $\frac{\partial}{\partial F}\left(\frac{1}{2}F^T \Sigma F\right) = \Sigma F$ (since $\Sigma$ is symmetric)
+
+Setting the gradient to zero:
+$$(M - R) - \Sigma F = 0$$
+
+## Analytical Solution (Equation 12)
+
+Rearranging:
+$$\Sigma F^* = M - R$$
+
+Multiplying both sides by $\Sigma^{-1}$:
+
+$$\boxed{F_{Tangent}^* = \Sigma^{-1}[M - R]}$$
+
+This is **Equation (12)** - the **analytical solution for the tangent portfolio** (unconstrained).
+
+## Second-Order Condition
+
+The Hessian matrix is:
+$$H = \nabla^2_F g_{\infty}(F) = -\Sigma$$
+
+Since $\Sigma$ is positive definite (by definition of a covariance matrix), $-\Sigma$ is negative definite.  This confirms that $F^*$ is a **maximum**.
+
+## Growth Rate at Optimum
+
+Substituting $F^* = \Sigma^{-1}(M-R)$ into the growth function:
+
+$$g_{\infty}(F^*) = r + F^{*T}(M-R) - \frac{1}{2}F^{*T}\Sigma F^*$$
+
+$$= r + (M-R)^T\Sigma^{-1}(M-R) - \frac{1}{2}(M-R)^T\Sigma^{-1}(M-R)$$
+
+$$\boxed{g_{\infty}(F^*) = r + \frac{1}{2}(M-R)^T\Sigma^{-1}(M-R)}$$
+
+## Interpretation
+
+The tangent portfolio represents:
+
+- The portfolio that maximizes long-term logarithmic growth (Kelly Criterion)
+- The portfolio with **maximum Sharpe ratio**
+- The point of tangency between the **Capital Market Line** and the **efficient frontier**
+
+**All three interpretations are equivalent under the continuous-time approximation.**
+
+# Minimum Variance Portfolio (Markowitz)
+
+## Objective
+
+The minimum variance portfolio minimizes portfolio risk **without** considering expected returns:
+
+$$\min_F \quad \sigma_p^2 = F^T \Sigma F$$
+
+subject to:
+$$\sum_{i=1}^n f_i = 1 \quad \text{(fully invested)}$$
+
+## Lagrangian Formulation
+
+$$\mathcal{L}(F, \lambda) = F^T \Sigma F - \lambda\left(\sum_{i=1}^n f_i - 1\right)$$
+
+Using vector notation with $\mathbf{1} = (1, 1, \ldots, 1)^T$:
+
+$$\mathcal{L}(F, \lambda) = F^T \Sigma F - \lambda(\mathbf{1}^T F - 1)$$
+
+## First-Order Conditions
+
+Taking derivatives:
+
+$$\frac{\partial \mathcal{L}}{\partial F} = 2\Sigma F - \lambda \mathbf{1} = 0$$
+
+$$\frac{\partial \mathcal{L}}{\partial \lambda} = \mathbf{1}^T F - 1 = 0$$
+
+From the first equation:
+$$\Sigma F = \frac{\lambda}{2}\mathbf{1}$$
+
+$$F = \frac{\lambda}{2}\Sigma^{-1}\mathbf{1}$$
+
+## Solve for Lagrange Multiplier
+
+Using the constraint $\mathbf{1}^T F = 1$:
+
+$$\mathbf{1}^T \left(\frac{\lambda}{2}\Sigma^{-1}\mathbf{1}\right) = 1$$
+
+$$\frac{\lambda}{2} \mathbf{1}^T \Sigma^{-1}\mathbf{1} = 1$$
+
+$$\lambda = \frac{2}{\mathbf{1}^T \Sigma^{-1}\mathbf{1}}$$
+
+## Analytical Solution
+
+Substituting back:
+
+$$F = \frac{\lambda}{2}\Sigma^{-1}\mathbf{1} = \frac{2}{2\mathbf{1}^T \Sigma^{-1}\mathbf{1}}\Sigma^{-1}\mathbf{1}$$
+
+$$\boxed{F_{MinVar} = \frac{\Sigma^{-1}\mathbf{1}}{\mathbf{1}^T\Sigma^{-1}\mathbf{1}}}$$
+
+This is the **minimum variance portfolio** - the **leftmost point** on the efficient frontier. 
+
+## Second-Order Condition
+
+The Hessian is:
+$$H = 2\Sigma$$
+
+Since $\Sigma$ is positive definite, $H > 0$, confirming $F_{MinVar}$ is a **minimum**.
+
+## Properties
+
+1. **Depends only on $\Sigma$**: Does not use expected returns $M$
+2. **Risk minimization**: Achieves lowest possible portfolio volatility
+3. **Starting point**: Leftmost point of the mean-variance efficient frontier
+4. **Diversification**: Typically spreads weight across many assets
+
+## Portfolio Variance at Optimum
+
+$$\sigma_{MinVar}^2 = F_{MinVar}^T \Sigma F_{MinVar} = \frac{1}{\mathbf{1}^T \Sigma^{-1} \mathbf{1}}$$
+
+# Equal Weights Portfolio (Naive Diversification)
+
+## Definition
+
+The equal weights (or "1/N") portfolio assigns:
+
+$$\boxed{f_i = \frac{1}{n} \quad \forall \, i = 1, \ldots, n}$$
+
+where $n$ is the number of assets.
+
+In vector notation:
+$$F_{EW} = \frac{1}{n}\mathbf{1}$$
+
+## Properties
+
+- **No optimization**: Ignores expected returns, variances, and correlations
+- **Naive diversification**: Assumes all assets contribute equally
+- **Benchmark**: Widely used as a baseline to test if sophisticated optimization adds value
+- **Simplicity**: Requires no parameter estimation
+
+## Portfolio Return and Variance
+
+Expected return:
+$$\mu_{EW} = \frac{1}{n}\sum_{i=1}^n \mu_i = \frac{1}{n}\mathbf{1}^T M$$
+
+Variance:
+$$\sigma_{EW}^2 = F_{EW}^T \Sigma F_{EW} = \frac{1}{n^2} \mathbf{1}^T \Sigma \mathbf{1} = \frac{1}{n^2}\sum_{i=1}^n\sum_{j=1}^n \Sigma_{ij}$$
+
+## Why Use Equal Weights?
+
+DeMiguel et al. (2009) showed that equal weights often **outperforms** mean-variance optimization **out-of-sample** due to:
+
+1. **Estimation error**: Sample estimates of $M$ and $\Sigma$ are noisy
+2. **Overfitting**: Optimized portfolios are sensitive to parameter errors
+3. **Simplicity advantage**: 1/N requires no estimation
+
+**However**, Carta & Conversano (2020) demonstrate that Kelly portfolios outperform equal weights when:
+
+- Parameters are estimated over sufficiently long periods
+- The Kelly Criterion's growth-optimality holds
+
+## Comparison: Equal Weights vs.  Optimized Portfolios
+
+| **Aspect** | **Equal Weights** | **Optimized Portfolios** |
+|------------|-------------------|--------------------------|
+| Requires estimates | No | Yes (M, Σ) |
+| Estimation error | None | High (out-of-sample) |
+| Concentration | Low (spreads evenly) | High (Kelly condenses) |
+| Expected return | Average | Potentially higher |
+| Volatility | Average | Depends on optimization |
+| Performance | Good out-of-sample | Better in-sample |
+
+# Constrained vs. Unconstrained Optimization
+
+## Why Constraints Matter
+
+The **unconstrained** analytical solutions:
+
+1. **Kelly/Tangent**: $F^* = \Sigma^{-1}[M-R]$
+2. **Min Variance**: $F_{MinVar} = \frac{\Sigma^{-1}\mathbf{1}}{\mathbf{1}^T\Sigma^{-1}\mathbf{1}}$
+
+may violate real-world constraints:
+
+### Problem 1: Negative Weights (Short-Selling)
+
+If asset $j$ has:
+- Low expected return: $\mu_j < r$ (worse than risk-free)
+- High correlation with better assets
+
+Then unconstrained $f_j^*$ may be **negative** (short position).
+
+**Example**: Suppose asset A has $\mu_A = 0.08$, $\sigma_A = 0.20$, and asset B has $\mu_B = 0.03$ (below risk-free $r = 0.05$) with high correlation.  The unconstrained solution may short B to over-weight A.
+
+### Problem 2: Over-Leverage
+
+If multiple assets have high expected returns, $\sum f_i^*$ may exceed 1 (leverage).
+
+**Example**: Two uncorrelated assets with $\mu_1 = 0.15$, $\sigma_1 = 0.20$ and $\mu_2 = 0.12$, $\sigma_2 = 0.18$ might yield $f_1^* = 0.75$, $f_2^* = 0.58$, totaling 1.33 (33% leverage).
+
+## Long-Only Constraints
+
+To enforce realistic portfolios, impose:
+
+$$\boxed{\begin{aligned}
+\max_F \quad & g(F) = r + F^T(M-R) - \frac{1}{2}F^T\Sigma F \\
+\text{s.t.} \quad & \sum_{i=1}^n f_i = 1 \quad \text{(fully invested)}\\
+& f_i \geq 0 \quad \forall \, i \quad \text{(no short-selling)}
+\end{aligned}}$$
+
+Similarly for Min Variance:
+
+$$\boxed{\begin{aligned}
+\min_F \quad & F^T \Sigma F \\
+\text{s.t.} \quad & \sum_{i=1}^n f_i = 1 \\
+& f_i \geq 0 \quad \forall \, i
+\end{aligned}}$$
+
+## Numerical Solution Required
+
+Constrained optimization requires **quadratic programming**:
+
+- **Objective**: Quadratic function of $F$
+- **Constraints**: Linear equality and inequality constraints
+- **Method**: Active-set algorithm or interior-point method
+
+In R, use `solve.QP()` from the `quadprog` package:
+
+```r
+library(quadprog)
+
+# For Kelly/Tangent portfolio
+Dmat <- 2 * Sigma
+dvec <- M - R
+Amat <- cbind(rep(1, n), diag(n))  # [sum=1, f>=0]
+bvec <- c(1, rep(0, n))
+
+solution <- solve.QP(Dmat = Dmat, dvec = dvec, 
+                     Amat = Amat, bvec = bvec, meq = 1)
+F_constrained <- solution$solution
+
+## Effect of Constraints
+
+When constraints bind:
+
+1. **Assets with $f_i^* < 0$** → Set to $f_i = 0$ (excluded)
+2.  **Assets with $f_i^*$ very large** → Reduced to satisfy $\sum f_i = 1$
+3. **Weights redistribute** to remaining assets
+
+**Result**: Constrained portfolios are typically:
+
+- More diversified than unconstrained (no extreme positions)
+- Lower expected return (constraints reduce optimization space)
+- More stable out-of-sample (less sensitive to estimation error)
+
+## Carta & Conversano (2020) Implementation
+
+The paper uses **constrained optimization** for all portfolios:
+
+- **Kelly Portfolio**: Maximize $g(F)$ subject to long-only constraints
+- **Tangent Portfolio**: Equivalent to Kelly under constraints
+- **Min Variance**: Minimize $\sigma_p^2$ subject to long-only constraints
+- **Equal Weights**: No optimization, automatically satisfies constraints
+
+This ensures all portfolios are **implementable** (no shorting, no leverage). 
+
+# Summary of All Four Methods
+
+## Analytical Solutions (Unconstrained)
+
+| **Portfolio** | **Objective** | **Analytical Solution** |
+|--------------|--------------|-------------------------|
+| **Kelly/Tangent** | Maximize $g(F) = r + F^T(M-R) - \frac{1}{2}F^T\Sigma F$ | $F^* = \Sigma^{-1}[M-R]$ |
+| **Min Variance** | Minimize $\sigma_p^2 = F^T \Sigma F$ | $F_{MV} = \frac{\Sigma^{-1}\mathbf{1}}{\mathbf{1}^T\Sigma^{-1}\mathbf{1}}$ |
+| **Equal Weights** | None (naive) | $F_{EW} = \frac{1}{n}\mathbf{1}$ |
+
+## Constrained Optimization (Practical Implementation)
+
+All portfolios subject to:
+$$\sum_{i=1}^n f_i = 1, \quad f_i \geq 0 \quad \forall \, i$$
+
+Requires **numerical quadratic programming** for Kelly/Tangent and Min Variance. 
+
+## Key Relationships
+
+1.  **Kelly = Tangent** (under continuous-time approximation with quadratic utility)
+2. **Min Variance** = Starting point of efficient frontier (leftmost)
+3.  **Equal Weights** = Benchmark (no optimization)
+4. **Efficient Frontier** = Set of portfolios with minimum $\sigma_p$ for given $\mu_p$
+
+## Interpretation Summary
+
+| **Portfolio** | **What It Maximizes** | **Position on Frontier** |
+|--------------|----------------------|-------------------------|
+| **Kelly/Tangent** | Geometric growth / Sharpe ratio | Tangency with CML |
+| **Min Variance** | Risk reduction (ignores return) | Leftmost point |
+| **Equal Weights** | Nothing (naive) | Typically below frontier (inefficient) |
+
+## Growth Rates at Optimum
+
+**Kelly/Tangent**:
+$$g_{Kelly}^* = r + \frac{1}{2}(M-R)^T\Sigma^{-1}(M-R)$$
+
+**Min Variance**:
+$$g_{MV} = r + F_{MV}^T(M-R) - \frac{1}{2}F_{MV}^T\Sigma F_{MV}$$
+
+**Equal Weights**:
+$$g_{EW} = r + \frac{1}{n}\mathbf{1}^T(M-R) - \frac{1}{2n^2}\mathbf{1}^T\Sigma\mathbf{1}$$
+
+**Ranking**: Typically $g_{Kelly} > g_{EW} > g_{MinVar}$ (Kelly has highest long-term growth). 
+
+## Numerical Example
+
+Consider 2 assets with:
+$$M = \begin{pmatrix} 0.10 \\ 0.08 \end{pmatrix}, \quad \Sigma = \begin{pmatrix} 0.04 & 0.01 \\ 0. 01 & 0. 03 \end{pmatrix}, \quad r = 0. 02$$
+
+**Kelly/Tangent** (unconstrained):
+$$F^* = \Sigma^{-1}(M-R) = \begin{pmatrix} 0.04 & 0.01 \\ 0.01 & 0. 03 \end{pmatrix}^{-1} \begin{pmatrix} 0. 08 \\ 0.06 \end{pmatrix} = \begin{pmatrix} 1.636 \\ 1.273 \end{pmatrix}$$
+
+Sum = 2.909 (over-leveraged! Constraints needed)
+
+**Min Variance** (unconstrained):
+$$F_{MV} = \frac{\Sigma^{-1}\mathbf{1}}{\mathbf{1}^T\Sigma^{-1}\mathbf{1}} = \begin{pmatrix} 0. 571 \\ 0.429 \end{pmatrix}$$
+
+Sum = 1.0 ✓ (satisfies constraint naturally)
+
+**Equal Weights**:
+$$F_{EW} = \begin{pmatrix} 0. 5 \\ 0.5 \end{pmatrix}$$
+
+This example shows why Kelly/Tangent needs constraints but Min Variance may not.
+
+# References
+
+1. Carta, A., & Conversano, C. (2020). Practical Implementation of the Kelly Criterion: Risk Management, Simulations and Portfolios. *Frontiers in Applied Mathematics and Statistics*, 6, Article 577050.
+
+2. Thorp, E. O. (1971).  Portfolio choice and the Kelly criterion. *Proceedings of the Business and Economics Statistics Section*, American Statistical Association, 215-224.
+
+3. Markowitz, H. (1952).  Portfolio selection. *The Journal of Finance*, 7(1), 77-91.
+
+4. DeMiguel, V., Garlappi, L., & Uppal, R. (2009).  Optimal versus naive diversification: How inefficient is the 1/N portfolio strategy? *The Review of Financial Studies*, 22(5), 1915-1953.
+
+5.  Merton, R. C.  (1969). Lifetime portfolio selection under uncertainty: The continuous-time case. *The Review of Economics and Statistics*, 51(3), 247-257.
