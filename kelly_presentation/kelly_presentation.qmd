@@ -1,0 +1,689 @@
+---
+title: "Practical Implementation of the Kelly Criterion: A Replication Study"
+author: "Agna Chan • Syed Bashir Hydari • Pranav Kasibhatla • Aniqa Nayim"
+date: "Quantitative Risk Management • December 5, 2025"
+format: 
+  beamer:
+    theme: CambridgeUS
+    colortheme: spruce
+    aspectratio: 169
+    navigation: horizontal
+    toc: false
+    slide-level: 2
+    fontsize: 10pt
+    include-in-header:
+      text: |
+        \setbeamertemplate{footline}[frame number]
+        \usepackage{graphicx}
+        \usepackage{amsmath}
+        \usepackage{amssymb}
+---
+
+# Introduction
+
+## Why Study the Kelly Criterion?
+
+\small
+
+:::: {.columns}
+::: {.column width="55%"}
+- Position sizing is central to portfolio management — not just *what* to invest in, but *how much* to allocate.
+
+- The Kelly Criterion provides a theoretically optimal framework for maximizing long-run capital growth.
+
+- Despite its elegance, Kelly's performance in real financial markets is uncertain due to estimation error, volatility, and market regimes.
+
+- Understanding where Kelly succeeds and where it breaks down is essential for evaluating practical portfolio strategies against benchmarks like mean-variance optimization and buy-and-hold.
+:::
+
+::: {.column width="45%"}
+![](figures/kelly_criterion_diagram.png){height=65%}
+:::
+::::
+
+## Overview of Carta & Conversano (2020)
+
+\footnotesize
+
+:::: {.columns}
+::: {.column width="33%"}
+**Objective of the Paper**
+
+Assess whether the Kelly Criterion can be *practically implemented* for real equity portfolios under realistic constraints.
+
+**Portfolio Construction Framework**
+
+Implements constrained Kelly (no leverage, no shorting) and compares it with:
+
+- Mean-variance
+- Tangent/Sharpe-maximizing
+- Equal-weight portfolios.
+:::
+
+::: {.column width="33%"}
+**Research Approach**
+
+Two-part study combining:
+
+1. Monte Carlo simulations and
+2. Empirical Euro Stoxx 50 portfolio backtests (2007–2018).
+
+**Impact of Rebalancing & Estimation**
+
+Performance is highly sensitive to estimation-window length and rebalancing frequency;
+
+- short windows → noisy estimates
+- long windows → sluggish response.
+:::
+
+::: {.column width="33%"}
+**Monte Carlo Insights**
+
+Full Kelly maximizes long-run median growth, but even slight over-betting dramatically increases drawdowns and probability of ruin.
+
+**Key Takeaways**
+
+Kelly delivers high growth in theory, but real-world performance is limited by estimation error, volatility clustering, and market regime changes.
+:::
+::::
+
+## Kelly Criterion Overview
+
+\small
+
+:::: {.columns}
+::: {.column width="45%"}
+- Determines the optimal fraction of capital to invest in a risky asset
+- Objective: maximize long-run growth rate of wealth
+- Invest more when expected return $\uparrow$
+- Invest less when volatility $\uparrow$
+- Under-betting = slow growth; over-betting = risk of ruin
+- Kelly focuses on long-term compounding, not short-term risk-adjusted returns (Sharpe).
+- Small deviations from the optimal fraction reduce growth slightly, but over-betting reduces it dramatically.
+:::
+
+::: {.column width="55%"}
+![](figures/kelly_infographic.png){height=75%}
+:::
+::::
+
+## Portfolio Kelly (Simplified Math)
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+- Kelly can be applied to many assets, not just one
+- The goal is to grow the portfolio as efficiently as possible over time
+- It chooses weights based on a balance between:
+    - Higher expected returns
+    - How risky the assets are together (their covariance)
+- In practice, we use simple rules:
+    - No borrowing (no leverage)
+    - No short selling
+    - All weights must add up to 1
+:::
+
+::: {.column width="50%"}
+$$\max_w \left( \mu^T w - \frac{1}{2} w^T \Sigma w \right)$$
+
+- $\mu$: expected returns
+- $\Sigma$: risk/covariance
+- $w$: portfolio weights
+
+The formula finds the *best mix* of assets to maximize long-term growth
+
+With constraints:
+
+$$w_i \geq 0, \quad \sum_i w_i = 1$$
+:::
+::::
+
+## Limitations of Kelly
+
+\footnotesize
+
+:::: {.columns}
+::: {.column width="33%"}
+**Parameter estimation error**
+
+Kelly weights depend heavily on estimates of expected returns and covariances; small errors can lead to very aggressive or very conservative positions.
+
+**Impact of portfolio constraints**
+
+No-leverage and no-short-selling constraints move the solution away from the theoretical Kelly optimum and can reduce its performance advantage.
+:::
+
+::: {.column width="33%"}
+**Large drawdowns and path risk**
+
+Growth-optimal portfolios often accept substantial interim volatility and deep drawdowns, which may be unacceptable for real investors.
+
+**Sensitivity to window length and rebalancing**
+
+Short estimation windows produce noisy inputs; long windows react slowly to new information. Performance is highly dependent on these choices.
+:::
+
+::: {.column width="33%"}
+**Non-stationary market dynamics**
+
+The approach assumes that return distributions are stable over time, but real markets exhibit regime shifts, crises, and structural breaks.
+:::
+::::
+
+# Methods
+
+## Project Objectives & Replication Scope
+
+\footnotesize
+
+- Replicate the core empirical results of *Carta & Conversano (2020)* using an independent, fully reproducible codebase
+- Implement both single-asset and multi-asset formulations of the Kelly Criterion
+- Benchmark Kelly against alternative strategies:
+    - Buy-and-Hold
+    - Equal-Weight
+    - Mean-Variance
+    - Tangency (Sharpe-optimal)
+- Examine how estimation-window length, rebalancing frequency, and portfolio constraints influence performance
+- Extend the original study to U.S. equities (Dow Jones 30) for out-of-sample validation
+- Evaluate the practical viability of Kelly under realistic frictions and parameter uncertainty
+- Assess the sensitivity of Kelly allocations to estimation noise and regime changes
+- Compare full-Kelly vs. fractional Kelly scaling to evaluate stability and risk-adjusted returns
+- Analyze portfolio concentration and exposure to tail-risk under Kelly optimization
+
+## Repo Structure / Experiment Pipeline
+
+\small
+
+:::: {.columns}
+::: {.column width="45%"}
+- End-to-end pipeline designed for reproducibility and methodological clarity
+- Directory structure reflects a modular research workflow:
+- **Workflow progression:** Data ingestion → Feature/return computation → Model optimization → Backtesting → Performance aggregation
+- Enables efficient comparison across parameter choices and strategy families
+:::
+
+::: {.column width="55%"}
+![](figures/repo_structure.png){height=70%}
+:::
+::::
+
+## Data Sources & Preprocessing
+
+\footnotesize
+
+:::: {.columns}
+::: {.column width="33%"}
+**Primary dataset: EuroStoxx 50 constituents**
+
+- Daily adjusted close prices (2007–2018), aligned with Carta & Conversano (2020)
+- Retrieved from Yahoo Finance
+- Serves as the main universe for replication of the original study
+
+**Data Cleaning & Alignment**
+
+- Synced trading calendars to ensure consistent time series
+- Forward-filled or removed missing values depending on severity
+:::
+
+::: {.column width="33%"}
+**Secondary dataset: Dow Jones Industrial Average (DJIA)**
+
+- Added for out-of-sample and robustness analysis
+- Processed using the same cleaning and formatting steps as EuroStoxx
+
+**Rolling-Window Preprocessing**
+
+- Used a 24-month lookback window to estimate: Expected return vector $\mu$ (sample mean) & Covariance matrix $\Sigma$ (sample covariance)
+- Windows updated monthly to mimic real-time estimation
+:::
+
+::: {.column width="33%"}
+**Return Construction**
+
+Converted prices to log-returns:
+
+$$r_t = \ln\left(\frac{P_t}{P_{t-1}}\right)$$
+
+Log-returns chosen for time-additivity and compatibility with Kelly's log-growth objective.
+
+**Pipeline Integration**
+
+- Processed returns fed into all portfolio models
+- Ensures every strategy uses identical inputs
+:::
+::::
+
+## Backtesting Framework & Evaluation Methodology
+
+\footnotesize
+
+**Backtesting Procedure**
+
+- Rolling 24-month estimation window
+- Monthly rebalancing in line with the paper
+- For each window, compute:
+    - Expected return vector $\mu$
+    - Covariance matrix $\Sigma$
+    - Strategy-specific weights (Kelly, MV, Tangency, EW)
+- Apply weights to next-period returns to simulate real-time portfolio evolution
+- Repeat until full sample is covered
+
+**Performance Evaluation**
+
+- CAGR (long-term growth rate)
+- Annualized volatility
+- Sharpe ratio
+- Maximum drawdown
+- Cumulative wealth plots and terminal wealth comparison
+
+# Results: Monte Carlo Simulations
+
+## Monte Carlo - Wealth Paths
+
+\small
+
+:::: {.columns}
+::: {.column width="40%"}
+- Simulates repeated coin-flip-style bets with known edge
+- Uses Kelly fractions: Half, Full, Double, Triple
+- Wealth evolves according
+
+$$W_{t+1} = W_t (1 + f R_t)$$
+
+where $f$ is Kelly fraction
+
+- Run experiments for: 100, 1,000, 10,000, and 40,000 trades
+- 20–30 simulated paths per fraction
+
+**Goal: evaluate growth, risk, and ruin under different Kelly fractions.**
+:::
+
+::: {.column width="60%"}
+![](figures/monte_carlo_wealth_paths.png){height=80%}
+:::
+::::
+
+## Monte Carlo - Median Wealth Growth Across Kelly Fractions
+
+![](figures/median_wealth_bar.png){height=75%}
+
+## Monte Carlo - Probability of Loss
+
+\small
+
+:::: {.columns}
+::: {.column width="55%"}
+![](figures/prob_loss_bar.png){height=75%}
+:::
+
+::: {.column width="45%"}
+- Full Kelly shows ~0% probability of loss at 40,000 trades
+- Half Kelly shows similarly low loss probability
+- Double Kelly: ~20% probability of loss even at 40,000 trades
+- Triple Kelly: ~35–40% probability of loss, highest ruin risk
+:::
+::::
+
+## Monte Carlo - Final Wealth Distribution
+
+\small
+
+:::: {.columns}
+::: {.column width="55%"}
+![](figures/final_wealth_distribution.png){height=75%}
+:::
+
+::: {.column width="45%"}
+**Key Takeaways:**
+
+- Full Kelly maximizes median long-run growth — confirming the theoretical optimum.
+- Half Kelly is more conservative but avoids catastrophic outcomes.
+- Over-betting (Double/Triple) leads to high variance and elevated ruin risk.
+- At 40,000 trades, Full Kelly dominates — but short-term paths are volatile.
+- Theory holds: fractional Kelly trades off growth for reduced variance.
+:::
+::::
+
+# Results: In-Sample Backtests
+
+## Transition: From Simulation to Empirical Testing
+
+\small
+
+**Monte Carlo validates theory under idealized conditions**
+
+- Now we test: Does Kelly perform well on real equity returns?
+
+**Two empirical settings:**
+
+1. **Single-Equity Analysis:** Banca Intesa (Italian bank stock)
+2. **Multi-Asset Portfolio:** Euro Stoxx 50 constituents
+
+**Key questions:**
+
+- Can Kelly replicate strong in-sample performance as in the paper?
+- How do constrained Kelly portfolios compare to MV and Tangency?
+- What does portfolio concentration look like under Kelly?
+
+## Single Equity Study - Banca Intesa
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+**Reproduced**
+
+![](figures/banca_reproduced.png){height=65%}
+:::
+
+::: {.column width="50%"}
+**Carta & Conversano (2020)**
+
+![](figures/banca_original.png){height=65%}
+:::
+::::
+
+## Single Equity Study - Banca Intesa (Tables)
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+**Reproduced**
+
+![](figures/table_banca_reproduced.png){height=55%}
+:::
+
+::: {.column width="50%"}
+**Carta & Conversano (2020)**
+
+![](figures/table_banca_original.png){height=55%}
+:::
+::::
+
+## Single Equity Study - Comparison
+
+\footnotesize
+
+We successfully replicated Carta & Conversano (2020)'s single-equity Kelly analysis for Banca Intesa (ISP.MI).
+
+**Key Findings:**
+
+- Full Kelly: Highest growth (CAGR 12.2% vs paper's 11.8%), but also highest volatility
+- Half Kelly: Better risk-adjusted returns, lower drawdowns
+- Our results show slightly higher returns due to minor data source differences (Yahoo Finance vs. original)
+- All qualitative relationships preserved: Full Kelly > Half Kelly > Buy-and-Hold in terminal wealth
+
+**Methodology Match:**
+
+- Daily returns with monthly rebalancing
+- 24-month rolling estimation window
+- Kelly fraction computed as $f^* = \frac{\mu - r}{\sigma^2}$
+
+## Portfolio Experiment - In Sample (EuroStoxx 50)
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+**Reproduced**
+
+![](figures/eurostoxx_cumulative_reproduced.png){height=70%}
+:::
+
+::: {.column width="50%"}
+**Carta & Conversano (2020)**
+
+![](figures/eurostoxx_cumulative_original.png){height=70%}
+:::
+::::
+
+## Portfolio Experiment - Mean-Variance Space
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+**Reproduced**
+
+![](figures/mv_space_reproduced.png){height=70%}
+:::
+
+::: {.column width="50%"}
+**Carta & Conversano (2020)**
+
+![](figures/mv_space_original.png){height=70%}
+:::
+::::
+
+## Portfolio Experiment - Tables
+
+\footnotesize
+
+:::: {.columns}
+::: {.column width="50%"}
+**Reproduced**
+
+![](figures/table_tangent_reproduced.png){height=30%}
+
+![](figures/table_kelly_reproduced.png){height=30%}
+
+![](figures/table_summary_reproduced.png){height=25%}
+:::
+
+::: {.column width="50%"}
+**Carta & Conversano (2020)**
+
+![](figures/table_tangent_original.png){height=30%}
+
+![](figures/table_kelly_original.png){height=30%}
+:::
+::::
+
+## Portfolio Experiment - In Sample Comparison
+
+\footnotesize
+
+We successfully replicated Carta & Conversano (2020)'s in-sample study to a large degree (preserving all relationships), reproducing Figure 4 (efficient frontier with portfolio positions), Figure 5 (cumulative wealth comparison), and Tables 6-7 (portfolio compositions) from the paper.
+
+Our implementation uses the Kelly Criterion quadratic approximation to maximize $(\mu-r)'w - 0.5w'\Sigma w$ under long-only constraints ($w \geq 0$, $\sum w = 1$) with constrained quadratic programming for the tangent portfolio, monthly rebalancing with log returns, and a 1% annual risk-free rate.
+
+**Key findings confirm the paper's results:**
+
+- Kelly portfolio achieves the highest terminal wealth
+- Exhibits portfolio condensation (2-6 assets vs. 6+ in the tangent portfolio)
+- Higher expected return and volatility
+- Both Kelly and tangent portfolios lie on the efficient frontier
+- Equal-weight and minimum variance portfolios underperform optimal strategies
+- All theoretical relationships are preserved despite data source differences
+
+## Analytical Derivation - Comparison
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+**Reproduced**
+
+![](figures/analytical_reproduced.png){height=70%}
+:::
+
+::: {.column width="50%"}
+**Carta & Conversano (2020)**
+
+![](figures/analytical_original.png){height=70%}
+:::
+::::
+
+## Analytical Derivation - Details
+
+\tiny
+
+We successfully replicated all analytical derivations of portfolio optimization methods from Carta & Conversano (2020), Sections 2.2-2.2.3.
+
+- **Kelly Criterion single-asset:** Derived the continuous-time approximation using Taylor series expansion to obtain the quadratic growth function $g(f) = r + f(\mu - r) - \frac{f^2\sigma^2}{2}$ (Equation 8) and the optimal Kelly fraction $f^* = \frac{\mu - r}{\sigma^2}$ (Equation 9).
+
+- **Multi-asset case:** Reproduced the growth rate formula $g(F) = r + F^T(M-R) - \frac{F^T\Sigma F}{2}$ (Equation 11), correctly attributing this to Thorp [8].
+
+- **Tangent Portfolio:** Derived the unconstrained analytical solution $F^* = \Sigma^{-1}[M-R]$ (Equation 12) using matrix calculus.
+
+- **Minimum Variance Portfolio:** Complete Lagrangian derivation obtaining $F_{MV} = \frac{\Sigma^{-1}\mathbf{1}}{\mathbf{1}^T\Sigma^{-1}\mathbf{1}}$.
+
+- **Equal Weights:** Formalized the 1/N strategy with expressions for return and variance.
+
+We distinguished between unconstrained analytical solutions and constrained optimization with long-only constraints ($f_i \geq 0$, $\sum f_i = 1$), explaining why numerical quadratic programming is required for practical implementation.
+
+# Results: Out-of-Sample Analysis
+
+## Portfolio Experiment - Out of Sample Overview
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+**Kelly Variants:**
+
+- Half, Full, Double, Triple
+- Long-Only & Unconstrained
+
+**Benchmark Models:**
+
+- Buy & Hold
+- Markowitz (Minimum-Variance)
+:::
+
+::: {.column width="50%"}
+**Objective:** Evaluate portfolio optimization performance on new data
+
+**Dataset:** EuroStoxx 50 constituents & Dow Jones - 2007–2018
+:::
+::::
+
+## Out of Sample (EuroStoxx - Constrained)
+
+\small
+
+:::: {.columns}
+::: {.column width="55%"}
+![](figures/oos_euro_constrained_cumulative.png){height=70%}
+:::
+
+::: {.column width="45%"}
+![](figures/oos_euro_constrained_perf.png){height=70%}
+:::
+::::
+
+\footnotesize
+
+- Long-Only Constraint - No Leverage (i.e., No Borrowing)
+- Minimum Variance Markowitz beats out all Kelly Optimization methods
+- Triple & Double Kelly almost identical to single Kelly - A common behavior in constrained Kelly
+
+## Out of Sample - Constrained Weights (Full & Half Kelly)
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+![](figures/oos_euro_weight_full_kelly.png){height=70%}
+:::
+
+::: {.column width="50%"}
+![](figures/oos_euro_weight_half_kelly.png){height=70%}
+:::
+::::
+
+\footnotesize
+
+- Full Kelly always invests 100% of assets - Half Kelly always 50% of assets
+- Not all stocks in EuroStoxx are invested in - indicating high risk stocks weighted at w=0
+- Many instances where entire investment is in a single stock - general tendency of constrained Kelly
+
+## Out of Sample - Constrained Weights (MinVar)
+
+![](figures/oos_euro_weight_minvar.png){height=75%}
+
+## Out of Sample (EuroStoxx - Unconstrained)
+
+\small
+
+:::: {.columns}
+::: {.column width="55%"}
+![](figures/oos_euro_unconstrained_cumulative.png){height=70%}
+:::
+
+::: {.column width="45%"}
+![](figures/oos_euro_unconstrained_perf.png){height=70%}
+:::
+::::
+
+\footnotesize
+
+- No constraint - borrowing allowed, shorting allowed
+- Double Kelly has greatest performance - expected as highly risky assets can be shorted or borrowed against in a more aggressive manner
+- Removing constraints allowed riskier borrowing and strategies, showing higher returns for Multiple Kelly
+
+## Out of Sample - Unconstrained Weights
+
+\small
+
+:::: {.columns}
+::: {.column width="50%"}
+![](figures/oos_euro_unconstrained_full_kelly.png){height=65%}
+:::
+
+::: {.column width="50%"}
+![](figures/oos_euro_unconstrained_half_kelly.png){height=65%}
+:::
+::::
+
+\footnotesize
+
+**Effects of removing constraints clearly visible:**
+
+- Negative allocations showing shorting on overall portfolio
+- Upwards of 300% of capital invested in some cases (Leverage)
+- Many more stocks featured in portfolio
+- Half Kelly is more risk-averse compared to Full Kelly
+
+## Out of Sample (Dow Jones)
+
+\small
+
+:::: {.columns}
+::: {.column width="55%"}
+![](figures/oos_dji_cumulative.png){height=70%}
+:::
+
+::: {.column width="45%"}
+![](figures/oos_dji_perf.png){height=70%}
+:::
+::::
+
+\footnotesize
+
+- Although a combined portfolio, DJI is treated as a single asset for Kelly - Sizing tool not a comprehensive strategy
+- Constrained Kellys - Higher risk lower reward - Counterproductive
+- Unconstrained Kellys - Higher risk higher reward
+- Full Kelly has "most favorable" conditions - Lower risk than other Kelly's & highest reward
+
+# Conclusion
+
+## Conclusion
+
+\footnotesize
+
+**Our Replication Success:**
+
+- **Monte Carlo simulations**: Successful replication—theory replicates from first principles.
+- **In-Sample EuroStoxx & Banca Intesa Backtest**: Successful replication—high fidelity despite data ambiguities.
+- **Out-of-Sample Analysis**: Mildly successful replication—empirical reality exposed the black box, but relationships preserved.
+
+**The Black Box Hurdle:** As we migrated deeper into empirical sections (from in sample to out of sample), we recognized a fundamental truth: exact numerical replication is nearly impossible without access to original source code and data. This encompasses:
+
+- **Data complexity**: Ticker ambiguities, vendor discrepancies, undocumented corporate action adjustments, omitted financial crises
+- **Optimization minutiae**: Unspecified solvers, covariance regularization methods, constraint interpretations, failure handling procedures
+- **Implementation choices**: Window types, rebalancing timing, transaction cost assumptions—each altering optimal portfolios
+
+Despite these hurdles upstream, we successfully reproduced Carta & Conversano (2020) methodology and retained all key relationships; reverse-engineering this black box with out-of-the-box manipulations.
