@@ -1,0 +1,604 @@
+---
+title: "Practical Implementation of the Kelly Criterion: A Replication and Extension of Carta & Conversano (2020)"
+author:
+  - name: Aniqa Nayim
+    affiliations:
+      - Columbia University, New York, NY
+  - name: Agna Chan
+    affiliations:
+      - Columbia University, New York, NY
+  - name: Pranav Kasibhatla
+    affiliations:
+      - Columbia University, New York, NY
+  - name: Syed Bashir Hydari
+    affiliations:
+      - Columbia University, New York, NY
+date: "December 2025"
+format:
+  pdf:
+    documentclass: article
+    papersize: letter
+    geometry:
+      - margin=1in
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    colorlinks: true
+    keep-tex: true
+    include-in-header:
+      text: |
+        \usepackage{amsmath}
+        \usepackage{amssymb}
+        \usepackage{amsthm}
+        \usepackage{mathtools}
+        \usepackage{booktabs}
+        \usepackage{longtable}
+        \usepackage{tabularx}
+        \usepackage{multirow}
+        \usepackage{float}
+        \usepackage{caption}
+        \usepackage{subcaption}
+        \captionsetup{font=small, labelfont=bf, skip=6pt}
+        \DeclareMathOperator*{\argmax}{arg\,max}
+        \DeclareMathOperator*{\argmin}{arg\,min}
+        \DeclareMathOperator{\E}{\mathbb{E}}
+        \DeclareMathOperator{\Var}{Var}
+        \DeclareMathOperator{\Cov}{Cov}
+        \newcommand{\R}{\mathbb{R}}
+        \newcommand{\F}{\mathbf{F}}
+        \newcommand{\w}{\mathbf{w}}
+        \newcommand{\Sig}{\mathbf{\Sigma}}
+        \newcommand{\Mub}{\boldsymbol{\mu}}
+        \newcommand{\Prob}{\mathbb{P}}
+        \newtheorem{theorem}{Theorem}
+        \newtheorem{lemma}[theorem]{Lemma}
+        \newtheorem{proposition}[theorem]{Proposition}
+        \newtheorem{corollary}[theorem]{Corollary}
+        \newtheorem{definition}{Definition}
+        \newtheorem{remark}{Remark}
+---
+
+{{< pagebreak >}}
+
+## Abstract {.unnumbered}
+
+We evaluate the performance of Kelly Criterion strategies in both simulated and real-market scenarios by reproducing and expanding the portfolio optimization research of Carta and Conversano (2020). We verify theoretical predictions across various Kelly fractions and investment horizons using Monte Carlo simulations under geometric Brownian motion, demonstrating that Full Kelly increases median wealth while over-betting causes high volatility and elevated ruin risk.
+
+We then develop a completely repeatable rolling-window backtesting workflow and apply these techniques to EuroStoxx 50 constituents from 2007 to 2018. Our in-sample results are consistent with the original study's qualitative conclusions despite data ambiguities and unreported implementation details: Kelly-based portfolios achieve higher long-run growth but show significantly larger drawdowns when compared to conventional mean-variance and equal-weight benchmarks. Although real-world noise increases estimate risk and diminishes Kelly's empirical benefits, out-of-sample experiments using the Dow Jones Industrial Average validate these structural linkages.
+
+Our investigation shows when Kelly performs well, when it doesn't, and how parameter uncertainty, rebalance frequency, and estimating window length affect real-world results. Overall, we demonstrate that fractional implementations provide more consistent and practical performance in applied portfolio management, even when Kelly is theoretically ideal.
+
+**Keywords:** Kelly Criterion, Portfolio Optimization, Risk Management, Monte Carlo Simulation, Geometric Brownian Motion, Compound Growth, Fractional Kelly
+
+{{< pagebreak >}}
+
+# Introduction
+
+## Background and Motivation
+
+The selection of assets has historically been the focus of portfolio management research, but the question of how much capital to deploy to each position is just as important. By recommending the distribution that optimizes the long-run geometric growth rate of wealth, the Kelly Criterion provides a theoretically ideal solution. Its success in gambling, statistical arbitrage, and algorithmic trading, along with its base in information theory, have made it prominent in many areas of quantitative finance. Kelly's attractiveness stems from its sophisticated closed-form solution and robust asymptotic guarantees: under idealized assumptions, it nearly always maximizes terminal wealth and, over time, beats any fractionally scaled alternative.
+
+Nevertheless, putting this theoretical optimality into reality is far from simple. Accurate estimates of anticipated returns and covariances, parameters that are infamously variable in actual financial markets are essential to Kelly allocations. Theoretical advantages may be outweighed by big, volatile holdings and significant drawdowns caused by even little estimation mistakes. Furthermore, real-world limitations including small sample sizes, transaction costs, regime changes, and leverage limitations, might drastically change Kelly's behavior.
+
+These difficulties serve as the main motivating factor behind our research, which aims to ascertain if the Kelly Criterion is still applicable in real-world market scenarios and when fractional variations provide a more sensible risk-return trade-off.
+
+## What We're Contributing
+
+This research offers a thorough expansion and replication of Carta and Conversano's (2020) empirical investigation. The creation of a separate, completely repeatable codebase that applies the Kelly Criterion's single-asset and multi-asset formulations is our first contribution. In order to provide methodological openness and validate the robustness of their findings, we reproduce the main empirical and simulation results of the original research using this methodology.
+
+To assess relative performance across various market settings, we compare Kelly-based strategies to a number of popular alternatives, including as Buy-and-Hold, Equal-Weight, Mean-Variance, and Tangency portfolios. We methodically examine how implementation decisions like estimation-window duration, rebalancing frequency, and portfolio limitations affect performance results in addition to replication.
+
+An additional contribution is the out-of-sample analysis using the Dow Jones 30 that extends the original study to U.S. stocks. This enables us to assess Kelly techniques' generalizability and determine the circumstances in which empirical findings are consistent across marketplaces.
+
+In order to ascertain which configurations produce more stable and realistic risk-adjusted performance, we compare full-Kelly and fractional-Kelly scaling and examine how sensitive Kelly allocations are to parameter uncertainty, regime shifts, and tail-risk exposure.
+
+# Literature Review {#sec-literature}
+
+## The Kelly Criterion: Origins and Theoretical Foundations
+
+The Kelly Criterion is derived from the work of Bell Labs researcher John L. Kelly Jr. (1956), who developed an information theory-based guideline for the best way to allocate resources. Kelly demonstrated that when continually faced with unknown outcomes, maximizing the anticipated logarithm of wealth results in the highest asymptotic growth rate. His discovery created a strong mathematical basis for taking risks by connecting investment performance to communication route capacity. Edward O. Thorp expanded Kelly's theories to actual gambling and then financial markets in the 1960s, showing how the log-optimal rule may take use of statistical advantages in equities pricing and blackjack. Although it is extremely sensitive to estimating error, the formula is asymptotically optimum; no other approach surpasses Kelly over the long term. The criteria are conceptually elegant but practically delicate since even a small amount of overbetting can result in significant drawdowns.
+
+## Portfolio Kelly in Academic Finance
+
+Kelly's framework was later extended from single‑wager problems to multi‑asset portfolios, where both expected returns and the covariance structure of assets jointly determine optimal allocations. In this setting, Portfolio Kelly maximizes predicted log‑wealth growth subject to practical constraints—typically long‑only and no‑leverage—to better reflect real investment environments. Prior academic studies show that unconstrained Kelly portfolios often concentrate heavily in a small number of assets with high estimated returns, making them extremely sensitive to noise in parameter estimates. Even small errors in the mean return vector $\mu$ or covariance matrix $\Sigma$ can lead to disproportionately large shifts in weights and excessive risk exposure. As a result, researchers frequently advocate fractional‑Kelly scaling as a more stable and robust alternative. Although it sacrifices some theoretical growth, fractional Kelly substantially reduces volatility, drawdowns, and estimation‑driven instability, making it more suitable for real‑world portfolio management.
+
+## Practical Concerns in Kelly Implementation
+
+Although Kelly seems appealing in theory, there are a number of real-world obstacles to overcome. The approach mostly depends on estimates of covariances and anticipated returns, which are infamously noisy, particularly over short samples. In unstable or regime-shifting situations, even little mistakes can result in significant overallocation. Kelly's stationarity assumptions are violated by the volatility clustering and structural breakdowns that financial markets display. This magnifies tail-risk concentration and raises drawdown risk, especially when allocations become too aggressive. Research regularly demonstrates that excessive betting, even if it is just marginally higher than the actual Kelly percentage, results in disastrous long-term consequences. In order to strike a compromise between theoretical optimality and realistic risk management, contemporary criticisms place a strong emphasis on robustness and propose fractional Kelly or hybrid methods.
+
+## Summary of Carta and Conversano (2020)
+
+Carta and Conversano (2020) look on the feasibility of applying the Kelly Criterion in equities portfolios given practical limitations. Their work consists of two parts: (1) empirical backtests on Euro Stoxx 50 stocks from 2007 to 2018 to examine Kelly's behavior in real markets, and (2) Monte Carlo simulations intended to confirm theoretical predictions in a frictionless environment. Classical theory is supported by the simulations: While even modest over-betting results in significant volatility and increased disaster possibilities, Full Kelly generates the highest median long-run gain. The authors compare Kelly with mean-variance, tangency, and equal-weight benchmarks using actual data and long-only, no-leverage portfolios. They discover that while Kelly-based allocations can perform better in long-term growth, they are extremely susceptible to changes in the market environment, the length of the estimating window, and the frequency of rebalancing. All Kelly models have significant drawdowns, lengthy windows lag structural changes, and short windows add noise. Their main finding is that practical implementation issues limit Kelly's theoretical attraction, making fractional variants more feasible in actual markets.
+
+# Theoretical Framework {#sec-theory}
+
+We replicate the Kelly portfolio optimization framework from Carta and Conversano [1]. The approach maximizes expected log wealth growth rather than arithmetic returns. For a risky asset with return $\mu$, volatility $\sigma$, and risk-free rate $r$, the growth-optimal allocation is:
+
+$$
+f^* = \frac{\mu - r}{\sigma^2}
+$$ {#eq-kelly-continuous}
+
+This maximizes $g(f) = (1-f)r + f\mu - \frac{1}{2}f^2\sigma^2$, where the quadratic variance penalty creates natural position limits.
+
+## Portfolio Implementation
+
+Carta and Conversano [1] extend this to portfolios with weight vector $\mathbf{F}$, returns $\boldsymbol{\mu}$, and covariance $\boldsymbol{\Sigma}$:
+
+$$
+g(\mathbf{F}) = r + \mathbf{F}^T(\boldsymbol{\mu} - r\mathbf{1}) - \frac{1}{2}\mathbf{F}^T\boldsymbol{\Sigma}\mathbf{F}
+$$ {#eq-growth}
+
+We impose long-only and no-leverage constraints following their implementation:
+
+$$
+\max_{\mathbf{F}} \; g(\mathbf{F}) \quad \text{s.t.} \quad \sum_{i=1}^n f_i \leq 1, \; f_i \geq 0 \; \forall i
+$$ {#eq-constrained}
+
+This constrained quadratic program yields optimal weights through numerical optimization.
+
+## Fractional Kelly and Parameter Estimation
+
+Full Kelly can be aggressive. Following Carta and Conversano [1], we test fractional strategies $\mathbf{F}_{\alpha} = \alpha \mathbf{F}^*$ where $\alpha \in \{0.5, 1.0, 2.0, 3.0\}$ controls risk exposure. Half-Kelly ($\alpha = 0.5$) sacrifices roughly 12.5% growth but cuts variance by 75%.
+
+We estimate moments from rolling 2400-day windows:
+
+$$
+\hat{\mu}_i(t) = \frac{1}{L}\sum_{s=t-L+1}^{t} r_{i,s}, \quad
+\hat{\sigma}_{ij}(t) = \frac{1}{L-1}\sum_{s=t-L+1}^{t} (r_{i,s} - \hat{\mu}_i)(r_{j,s} - \hat{\mu}_j)
+$$ {#eq-estimation}
+
+Performance evaluation uses CAGR, maximum drawdown, Sharpe ratio, and Calmar ratio. We validate theoretical predictions through Monte Carlo simulation under geometric Brownian motion before applying to market data [1].
+
+## Practical Interpretation of Kelly Fractions
+
+The Kelly Criterion gives a closed-form solution for the optimal betting fraction, yet the economic implications of these fractions are crucial to comprehending the ensuing simulations. A fraction that is less than the optimal Kelly value is deliberately opting for greater stability at the expense of expected growth, thus reducing the risk of drawdown and volatility. Full Kelly yields the highest long-run median wealth but it also brings the highest sensitivity to return fluctuations, thus making the outcomes very path-dependent in the presence of finite time horizons. Fractions that are above the theoretical optimum bring about the effect of leverage and consequently the increase in volatility gets to the point where unfavorable return sequences become the most common outcomes even though the expected growth has been increased. It is precisely these dynamics that lead us to the decision of performing Monte Carlo analysis as a middle step: simulations create a no-friction scenario where these forces can be dissected and understood before having to deal with estimation error and the imperfections of real-market conditions in the empirical backtests.
+
+## Parameter Uncertainty and Regularized Kelly
+
+The traditional Kelly Criterion presumes that expected returns and covariances are known with certainty, and this presumption is seldom realized in the actual financial markets. In practical situations, parameters are derived from historical data and are affected by considerable sampling error, especially in case of finite time frames and non-stationary settings. Since Kelly allocations are directly proportional to estimated mean returns and inversely proportional to estimated variance, slight estimation inaccuracies can result in very high portfolio weights, high concentration, and unstable leverage. Such a parameter uncertainty sensitivity is one of the major drawbacks of full-Kelly approaches in the application of portfolio management.
+
+To mitigate this fragility, we consider regularized Kelly strategies that reduce reliance on noisy parameter estimates. A simple approach is mean shrinkage, in which the estimated return vector is scaled toward zero,
+
+$$
+\tilde{\mu} = \lambda \hat{\mu}, \quad \lambda \in [0,1],
+$$
+
+where $\lambda$ reflects confidence in the estimated signal. Covariance shrinkage may be applied analogously to improve numerical stability. These regularized Kelly portfolios preserve the growth-optimal structure of the Kelly Criterion while trading some theoretical optimality for improved stability and more reliable out-of-sample performance.
+
+# Methodology {#sec-methodology}
+
+## Monte Carlo Simulation Design
+
+We validate Kelly Criterion theoretical predictions through controlled Monte Carlo simulation under geometric Brownian motion, where parameter uncertainty and market frictions are absent. This establishes a clean benchmark before confronting empirical complexity.
+
+### Parameters and Strategies
+
+We simulate a single risky asset with market-calibrated parameters: annual expected return $\mu = 12\%$, annual volatility $\sigma = 40\%$, and risk-free rate $r = 1\%$. These values yield theoretical Full Kelly allocation $f^* = (\mu - r)/\sigma^2 = 0.11/0.16 = 0.6875$, indicating 68.75% allocation to the risky asset with 31.25% in cash.
+
+We test four fractional strategies:
+
+- **Half Kelly:** $f = 0.344$ (34.4% risky allocation)
+- **Full Kelly:** $f = 0.6875$ (68.75% risky allocation)
+- **Double Kelly:** $f = 1.375$ (137.5% allocation requiring 37.5% leverage)
+- **Triple Kelly:** $f = 2.063$ (206.3% allocation requiring 106% leverage)
+
+Over-bet strategies (Double and Triple Kelly) model leverage via borrowing at the risk-free rate, serving as cautionary examples of excessive risk-taking.
+
+### Simulation Mechanics
+
+For each strategy and time horizon, we generate 10,000 independent wealth paths starting from $W_0 = 1$. Each path evolves according to the strategy's fixed allocation rule. At time step $t$:
+
+1. Generate risky asset return $r_t \sim \mathcal{N}(\mu/252, \sigma^2/252)$ assuming 252 trading days annually
+2. Calculate portfolio return $r_p = (1-f)r + f \cdot r_t$ where cash earns the risk-free rate
+3. Update wealth $W_{t+1} = W_t \cdot \exp(r_p)$ through continuous compounding
+
+Daily rebalancing maintains the target allocation $f$. While unrealistic for actual trading, this matches theoretical continuous rebalancing assumptions. Empirical backtests later employ monthly rebalancing [1].
+
+### Time Horizons
+
+We test four horizons to examine asymptotic convergence:
+
+- **100 trades:** Approximately 5 months. Insufficient for strong Kelly effects.
+- **1,000 trades:** Approximately 4 years. Short-term horizon.
+- **10,000 trades:** Approximately 40 years. Theory dominates randomness.
+- **40,000 trades:** Approximately 160 years. Confirms asymptotic properties.
+
+### Output Metrics
+
+For each strategy and horizon, we compute across all 10,000 paths:
+
+- **Mean terminal wealth:** Heavily influenced by extreme outcomes
+- **Median terminal wealth:** Represents typical path; theory predicts Full Kelly maximizes this
+- **Standard deviation:** Measures outcome dispersion
+- **Probability of loss:** $P(W_T < 1)$, fraction ending below initial wealth
+- **Probability of doubling:** $P(W_T > 2)$
+- **Probability of 10× wealth:** $P(W_T > 10)$
+
+Additional loss severity metrics include $P(W_T < 0.5)$ (50% loss) and $P(W_T < 0.1)$ (90% loss) to capture extreme downside risk for over-bet strategies.
+
+### Implementation and Reproducibility
+
+Implementation uses R with vectorized operations. All simulations (4 strategies × 4 horizons × 10,000 paths) complete in 5-10 minutes on standard hardware. Random seed is set to 123 for reproducibility—identical results across independent runs.
+
+We validate our geometric Brownian motion engine by verifying sample mean and variance of log returns converge to theoretical values $(\mu - \sigma^2/2)$ and $\sigma^2$ respectively, and confirming terminal wealth follows approximately log-normal distribution.
+
+These simulations test three core predictions: Full Kelly maximizes median wealth, over-betting produces catastrophic outcomes, and fractional Kelly offers superior risk-adjusted performance. Results provide clean validation before empirical analysis where parameter estimation errors complicate interpretation. The use of this reproducible pipeline means that all the results, whether they are simulation, in-sample, or out-of-sample, can be perfectly duplicated, which allows for peer verification and methodological transparency to a great extent.
+
+## Empirical Backtest Framework
+
+### Research Repository and Experiment Pipeline
+
+The foundation of our empirical backtesting architecture is an end-to-end, completely modular research process intended for scalability, reproducibility, and transparency. Each step of the workflow may be independently evaluated because to the repository structure's separation of raw data, processed datasets, model implementations, analysis functions, and produced outputs. Return construction and rolling-window parameter estimates come after data intake and cleaning. The Kelly, Mean-Variance, Tangency, and Equal-Weight techniques' model-specific optimization procedures directly use these processed inputs. These weights are applied progressively over time by a centralized backtesting module to generate out-of-sample performance series. This modular design mirrors best practices in empirical finance research: it reduces cross‑contamination between stages, enables controlled experimentation with estimation windows and model choices, and ensures that results can be reproduced exactly from the same repository. The pipeline also supports extensions such as sensitivity testing, alternative datasets, and parameter‑uncertainty analysis without structural changes to the codebase.
+
+### Data Sources and Preprocessing
+
+Our empirical tests are based on two worlds of equity. Daily adjusted closure prices for EuroStoxx 50 members from 2007 to 2018 make up the main dataset, which replicates the asset universe utilized by Carta and Conversano (2020). In order to assess out-of-sample robustness, we use the Dow Jones Industrial Average, which undergoes the same formatting and cleaning processes. To guarantee time-additivity and conformity with the Kelly log-growth aim, all price series are transformed into log-returns. Preprocessing involves making sure that every asset has a consistent and aligned return history, eliminating or forward-filling missing data, and synchronizing trade calendars. We create rolling 24-month estimate windows from the cleaned series that are updated every month, yielding sample means and sample covariance matrices for every rebalancing date. By ensuring that all portfolio strategies function under the same informational settings, these standardized inputs offer a controlled foundation for contrasting Kelly-based allocations with conventional benchmarks.
+
+### Backtesting Procedure
+
+The rolling-window nature of the backtesting framework simulates a real-time investor with little information. Using the daily data from the preceding 24 months, we calculate the covariance matrix and anticipated return vector for each sample month. The optimization processes that provide portfolio weights for Full Kelly, fractional Kelly variants, Mean-Variance, Tangency, and Equal-Weight strategies subsequently get these parameters. The weight restrictions—long-only and no leverage—reflect the original study's implementation decisions. An out-of-sample portfolio value route is created by applying the weights determined for a particular month to the realized returns for the subsequent month. A complete series of realized returns for each approach is obtained by repeating this process until the dataset is finished. CAGR, annualized volatility, Sharpe ratio, maximum drawdown, and trajectory stability are used to assess final performance. This structure emphasizes how sensitive Kelly allocations are to estimating noise and enables clear comparisons between techniques.
+
+## Performance Metrics
+
+We apply a set of standard performance indicators often employed in empirical asset-management research to assess each portfolio strategy within a consistent and rigorous framework. Compound Annual Growth Rate (CAGR), which describes the rate of wealth growth over the backtest period, is used to measure long-horizon performance. We use maximum drawdown, which captures the biggest peak-to-trough loss and represents the strategy's downside exposure, and annualized volatility as a measure of return dispersion to evaluate risk. We calculate the Sharpe ratio, which is defined as excess return per unit of volatility, to assess risk-adjusted performance. We also look at growth-trajectory smoothness, which assesses the constancy of compounding across time, because Kelly techniques might produce unstable trajectories. Together, these criteria enable us to evaluate strategies based on risk, stability, and robustness in addition to total return—all important factors to take into account when assessing Kelly portfolios' practical practicality.
+
+# Results {#sec-results}
+
+## Monte Carlo Validation
+
+We validate Kelly's theoretical predictions through controlled Monte Carlo simulation under geometric Brownian motion. Following Carta and Conversano's methodology [1], we use market-calibrated parameters: 12% annual expected return, 40% annual volatility, and 1% risk-free rate, converted to daily trading periods. We test four strategies—Half Kelly ($\alpha = 0.5$), Full Kelly ($\alpha = 1.0$), Double Kelly ($\alpha = 2.0$), and Triple Kelly ($\alpha = 3.0$)—across four time horizons (100, 1,000, 10,000, and 40,000 trades) with 10,000 independent simulation paths each.
+
+![Sample wealth trajectories for Half, Full, Double, and Triple Kelly over 1,000 simulated trades.](figures/sample_paths_1000trades.png){#fig-sample-paths width="95%"}
+
+The qualitative behavior of each Kelly fraction under repeated independent bets is shown by the sample wealth trajectories in @fig-sample-paths. With very low dispersion and steady upward drift, Half Kelly generates the most stable pathways. Full Kelly is more sensitive to changes in returns, as seen by its larger volatility bands and faster median increase. Double Kelly and Triple Kelly, on the other hand, produce progressively erratic trajectories: wealth routes spread out quickly, and while some extreme outliers increase substantially, many simulations drift downward or collapse completely. These patterns graphically illustrate the basic trade-off between risk and growth: aggressive over-betting increases variation to the point that unfavorable routes predominate usual outcomes, whereas moderate Kelly fractions effectively harness the edge. This image illustrates why leveraging over the optimal proportion results in declining wealth outcomes and serves as the intuitive basis for the formal Monte Carlo conclusions that follow.
+
+![Kelly strategy performance summary. Top panel: median final wealth across Half, Full, Double, and Triple Kelly as the number of trades increases. Bottom panel: probability of ending with less than initial wealth for each fraction at the same horizons.](figures/summarymonte.png){#fig-summary-monte width="90%"}
+
+Kelly fractions' behavior under repeated independent bets is evident from the combined figures for median ultimate wealth and likelihood of loss. According to its theoretical log-optimality, Full Kelly creates the largest median terminal wealth at long horizons, as the top panel illustrates, whereas Half Kelly yields slower but more steady growth. On the other hand, when the number of trades rises, both Double Kelly and Triple Kelly show a sharp decline in median outcomes; this phenomenon is caused by the explosive volatility that arises when position sizes above the ideal proportion. The bottom panel highlights the same dynamic from a risk perspective: the probability of ending with less wealth than initially invested declines for Half and Full Kelly as sample size grows, but remains persistently high for Double Kelly and becomes effectively certain for Triple Kelly at long horizons. Taken together, these results show that appropriate Kelly fractions compound a statistical edge into long‑run wealth, whereas over‑betting amplifies variance to such a degree that typical outcomes collapse despite occasional extreme windfall paths.
+
+![Final wealth distributions for Half Kelly, Full Kelly, Double Kelly, and Triple Kelly across 100, 1,000, and 10,000 simulated trades. Density curves illustrate how the distribution widens and skews as leverage increases, while dashed lines mark median terminal wealth for each strategy. At short horizons all strategies remain tightly clustered, but as the number of trades grows, Full Kelly and Half Kelly shift toward higher median wealth, whereas Double and Triple Kelly become increasingly dispersed with long left tails and collapsing medians.](figures/wealthmonte.png){#fig-wealth-monte width="100%"}
+
+The end wealth distributions of Half, Full, Double, and Triple Kelly across 100, 1,000, and 10,000 simulated transactions are compared in @fig-wealth-monte's density charts. All methods result in wealth outcomes that are closely grouped and have comparable medians at short horizons, indicating that there is little time for compounding or over-betting effects to build up. While Double and particularly Triple Kelly create progressively broad, skewed distributions with lengthy left-tails, Full and Half Kelly shift toward greater and more stable median wealth as the number of trades grows. These trends demonstrate how estimating error and volatility increase under over-leveraged fractions, resulting in a collapse of median wealth even when extreme positive outcomes are still achievable on occasion.
+
+: Monte Carlo Results at 10,000 Trades. Terminal wealth statistics from our independent replication. Full Kelly achieves highest median wealth; over-betting produces catastrophic outcomes. {#tbl-mc-10000}
+
+| **Strategy** | **Mean** | **Median** | **SD** | **P(Loss)** | **P(W>2)** | **P(W>10)** |
+|--------------|----------|------------|--------|-------------|------------|-------------|
+| Half Kelly   | 6.8      | 4.64       | 7.2    | 4.0%        | 83.8%      | 18.9%       |
+| Full Kelly   | 31.3     | 6.51       | 122    | 13.5%       | 75.9%      | 40.1%       |
+| Double Kelly | 416      | 1.47       | 10931  | 45.5%       | 46.6%      | 29.2%       |
+| Triple Kelly | 6138     | 0.017      | 485501 | 78.4%       | 18.1%      | 10.8%       |
+
+Results confirm the qualitative patterns Carta and Conversano identified [1], though specific values differ due to independent random realizations. At 10,000 trades (approximately 40 years of daily trading), Full Kelly achieves median terminal wealth of 6.51—the highest among all strategies—validating the theoretical prediction of median wealth maximization. Half Kelly reaches 4.64 with dramatically lower risk (standard deviation 7.2 versus Full Kelly's 122), delivering 71% of Full Kelly's median return while cutting loss probability from 13.5% to 4.0%.
+
+Over-betting produces catastrophic outcomes consistent with Carta and Conversano's warnings [1]. Triple Kelly exhibits devastating performance: 78.4% probability of ending below initial capital, with median terminal wealth of only 0.017—a 98.3% loss. The strategy's extreme volatility (standard deviation exceeding 485,000) reflects frequent portfolio annihilation punctuated by rare explosive gains. Even Double Kelly demonstrates poor median outcomes (1.47), with 45.5% ruin probability despite its high mean (416) and massive standard deviation (10,931). These findings validate that exceeding the optimal Kelly fraction destroys both growth and capital preservation.
+
+The fractional Kelly tradeoff emerges clearly. Half Kelly sacrifices approximately 29% of Full Kelly's median growth but reduces standard deviation by 94% and cuts ruin probability by 70%. This dramatic risk reduction explains practitioner preference for fractional strategies despite their lower theoretical growth rates. Our implementation validates Carta and Conversano's core findings [1]: Full Kelly maximizes median wealth, over-betting leads to ruin, and fractional Kelly offers superior risk-adjusted performance. The numerical differences between our results and theirs reflect natural Monte Carlo variation across independent simulation runs.
+
+Overall, the Monte Carlo trials validate the Kelly Criterion's theoretical characteristics as well as the empirical cautions highlighted in earlier research. While Half Kelly achieves a more favorable balance between growth and risk by trading just a tiny return for much increased stability, Full Kelly consistently optimizes long-run median wealth at the expense of significant dispersion. On the other hand, although having a favorable statistical advantage, over-leveraged techniques like Double and Triple Kelly produce very skewed wealth distributions that are characterized by significant volatility and frequently result in disaster. These results support the idea that precise sizing is necessary since even little variations over the actual Kelly fraction might outweigh anticipated benefits. Therefore, the Monte Carlo results provide a solid basis for the empirical analysis that follows, showing why excess leverage regularly ruins long-run performance and why fractional Kelly is frequently favored in actual contexts.
+
+Our Monte Carlo results are strikingly similar to the theoretical and simulation-based results that were reported by Carta and Conversano (2020). In both studies, Full Kelly is always the best choice for maximizing the median long-run wealth, Half Kelly provides lower but smoother growth, and over-betting through Double and Triple Kelly leads to heavy-tailed wealth distributions with occasional catastrophic collapses. The increase in the dispersion of outcomes, the constant winning of Full Kelly in median-wealth metrics, and the quickly rising probability of ruin for leveraged fractions all confirm the qualitative patterns originally highlighted. Furthermore, the manner in which our simulated wealth trajectories and final-wealth distributions correspond to the authors' figures is as follows: Half Kelly shows steadily increasing drift, Full Kelly shows higher volatility but excellent compounding, and over-leveraged strategies quickly split the paths with many failing to almost zero. These resemblances are a strong indication that our simulation engine delivers accurate representations of the key theoretical predictions and visual signatures that Carta and Conversano underline, thus creating a solid benchmark before moving on to empirical evaluation.
+
+## Empirical Backtest Results
+
+Having validated the Kelly Criterion's theoretical predictions through Monte Carlo simulation, we now turn to empirical backtesting using real market data. This section presents in-sample results for two settings examined by Carta and Conversano (2020): a single-equity analysis using Banca Intesa (Intesa Sanpaolo) stock, and a multi-asset portfolio optimization using EuroStoxx 50 constituents. Our objective is to assess whether the theoretical relationships observed in simulation---Full Kelly maximizing median wealth, fractional Kelly offering superior risk-adjusted performance, and over-betting producing catastrophic outcomes---persist when confronting actual market dynamics.
+
+### Single-Equity Analysis: Banca Intesa
+
+We first replicate the single-equity Kelly backtest from Section 3.2.1 of the original paper, analyzing daily returns of Banca Intesa stock over the period January 1, 2007 to December 31, 2018. This setting provides a clean test of Kelly sizing mechanics before introducing the complexity of multi-asset covariance estimation.
+
+**Methodology.** For a single risky asset, the optimal Kelly fraction is given by:
+
+$$
+f^* = \frac{\mu - r}{\sigma^2}
+$$ {#eq-kelly-single-banca}
+
+where $\mu$ denotes the mean daily return, $r$ the risk-free rate, and $\sigma^2$ the return variance. We test four strategies: Buy and Hold (100% allocation to Banca Intesa), Half Kelly ($0.5 \times f^*$), Full Kelly ($f^*$), and Triple Kelly ($3 \times f^*$). Portfolio wealth evolves according to:
+
+$$
+W_{t+1} = W_t \cdot (1-f) \cdot (1 + r_f) + W_t \cdot f \cdot (1 + r_t)
+$$ {#eq-wealth-evolution-banca}
+
+where the first term represents the risk-free allocation earning the daily risk-free rate, and the second term captures the risky allocation earning the realized stock return.
+
+**Parameter Estimates.** Using 3,044 daily observations, we estimate the following parameters:
+
+- Mean daily return: $\hat{\mu} = 2.08 \times 10^{-4}$
+- Daily variance: $\hat{\sigma}^2 = 7.28 \times 10^{-4}$
+- Daily risk-free rate: $r_f = 3.831 \times 10^{-5}$ (approximately 1% annually)
+- Optimal Kelly fraction: $f^* = 0.2337$ (23.37% allocation to the risky asset)
+
+These estimates differ modestly from those reported in the original paper ($f^* = 0.5159$), reflecting differences in data sources and exact observation counts. Nevertheless, the qualitative relationships between strategies remain preserved.
+
+**Results.** @fig-banca-intesa-wealth displays cumulative wealth paths for all four strategies over the 2007--2018 sample period, while @fig-banca-intesa-metrics presents the corresponding performance metrics.
+
+![Cumulative wealth paths for Buy and Hold, Half Kelly, Full Kelly, and Triple Kelly strategies applied to Banca Intesa stock (2007--2018). Left panel shows our reproduced results; right panel displays Figure 3 from Carta & Conversano (2020). Both analyses demonstrate that Full Kelly achieves the highest terminal wealth, while Triple Kelly exhibits extreme volatility and severe drawdowns during the 2008 financial crisis and 2011 European debt crisis.](figures/In-Sample%20Banca%20Intesa.jpg){#fig-banca-intesa-wealth width="92%"}
+
+![Performance metrics comparison for Banca Intesa Kelly strategies. Left panel presents our reproduced results; right panel shows Table 5 from Carta & Conversano (2020). Despite differences in absolute values due to data source variations, the relative ordering of strategies is preserved: Full Kelly achieves the highest CAGR among viable strategies, Half Kelly offers reduced volatility with competitive returns, and Triple Kelly demonstrates the dangers of over-betting with severe maximum drawdowns.](figures/In-Sample%20Banca%20Intesa%20Part%202.jpg){#fig-banca-intesa-metrics width="92%"}
+
+**Interpretation.** The empirical results confirm several key theoretical predictions. First, Full Kelly achieves the highest final wealth ($1.194\times$) among strategies that do not over-bet, consistent with its theoretical optimality for long-run geometric growth. Second, Half Kelly provides nearly equivalent terminal wealth ($1.176\times$) while dramatically reducing volatility from 10.19% to 5.09% annually and cutting maximum drawdown from $-23.46\%$ to $-11.11\%$. This favorable risk-return tradeoff explains practitioner preference for fractional Kelly implementations. Third, Triple Kelly demonstrates the catastrophic consequences of over-betting: despite allocating three times the optimal fraction, it produces negative CAGR ($-0.57\%$) and suffers a devastating $-65.17\%$ maximum drawdown. Finally, Buy and Hold substantially underperforms all Kelly variants, ending the period with only $0.62\times$ initial wealth and experiencing an $-81.28\%$ maximum drawdown during the financial crisis.
+
+The qualitative patterns in our replication closely match those reported by Carta and Conversano (2020), even though absolute performance metrics differ due to data source variations. Critically, the relative ordering of strategies---Full Kelly outperforming Half Kelly outperforming Triple Kelly in terminal wealth, with Half Kelly offering superior risk-adjusted characteristics---is preserved across both analyses.
+
+### Multi-Asset Portfolio Analysis: EuroStoxx 50
+
+Having validated the Kelly framework on a single asset, we now examine its behavior in a multi-asset setting where covariance estimation introduces additional complexity. We extend the analysis to multi-asset portfolio optimization using EuroStoxx 50 constituents over the period 2000--2018, allowing comparison of Kelly portfolios against classical mean-variance benchmarks.
+
+**Methodology.** For a portfolio of $n$ risky assets with expected return vector $\boldsymbol{\mu}$ and covariance matrix $\boldsymbol{\Sigma}$, the Kelly Criterion maximizes expected log-wealth growth:
+
+$$
+g(\mathbf{F}) = r + \mathbf{F}^\top (\boldsymbol{\mu} - r\mathbf{1}) - \frac{1}{2} \mathbf{F}^\top \boldsymbol{\Sigma} \mathbf{F}
+$$ {#eq-kelly-growth-euro}
+
+Following Carta and Conversano (2020), we impose long-only and no-leverage constraints:
+
+$$
+\max_{\mathbf{F}} g(\mathbf{F}) \quad \text{s.t.} \quad \sum_{i=1}^{n} f_i \leq 1, \quad f_i \geq 0 \; \forall i
+$$ {#eq-kelly-constraints-euro}
+
+We compare four portfolio strategies:
+
+1. **Kelly Portfolio**: Maximizes log-wealth growth subject to long-only, no-leverage constraints
+2. **Tangent Portfolio**: Maximizes the Sharpe ratio subject to long-only constraints
+3. **Minimum Variance Portfolio**: Minimizes $\mathbf{w}^\top \boldsymbol{\Sigma} \mathbf{w}$ subject to full investment
+4. **Equal Weight Portfolio**: Allocates $1/n$ to each of the $n$ assets
+
+Parameters are estimated using the full in-sample period, and portfolio weights are computed via constrained quadratic programming with appropriate regularization to ensure numerical stability.
+
+**Portfolio Compositions.** @fig-portfolio-compositions presents the composition of the Tangent and Kelly portfolios alongside summary statistics for all four strategies. A striking feature of Kelly optimization is portfolio concentration: while the Tangent portfolio distributes weight across six assets, the Kelly portfolio concentrates over 99% of capital in just two stocks (ITX.MC at 62.33% and VIV.PA at 37.67%). This concentration reflects Kelly's aggressive pursuit of the highest-return assets, a characteristic that amplifies both potential gains and estimation risk.
+
+![Portfolio compositions and summary statistics for the in-sample EuroStoxx 50 analysis. Left panel shows our reproduced results: the Tangent Portfolio (Table 2, top) distributes weight across six assets, while the Kelly Portfolio (Table 1, middle) concentrates in just two stocks. The Summary Statistics table (Table 4, bottom) compares all four strategies. Right panel displays the corresponding Tables 6 and 7 from Carta & Conversano (2020). Our Kelly portfolio achieves 1.589% monthly return with 6.102% monthly volatility; the Tangent portfolio achieves 1.367% monthly return with 4.748% monthly volatility.](figures/In-Sample%20EuroStoxx%2050%20Part%202.jpg){#fig-portfolio-compositions width="95%"}
+
+The summary statistics in @fig-portfolio-compositions reveal important patterns. The Kelly portfolio achieves the highest monthly return (1.589%) but also exhibits the highest volatility (6.102%). The coefficient of variation (volatility divided by return) is 3.840 for Kelly versus 3.472 for the Tangent portfolio, suggesting that Kelly's additional return comes at a proportionally higher risk cost. The Minimum Variance and Equal Weight portfolios deliver identical expected monthly returns (0.649%) but with different risk profiles: Minimum Variance achieves 3.535% monthly volatility versus 4.918% for Equal Weight.
+
+**Mean-Variance Analysis.** @fig-efficient-frontier displays the mean-variance efficient frontier along with the positions of all four portfolios. The Minimum Variance portfolio lies at the leftmost point of the frontier, representing the lowest achievable risk under long-only constraints. The Tangent portfolio lies on the Capital Market Line, maximizing the Sharpe ratio. Notably, the Kelly portfolio lies *beyond* the Tangent portfolio on the frontier, accepting higher risk in pursuit of maximum geometric growth. The Equal Weight portfolio lies strictly inside the efficient frontier, confirming its mean-variance inefficiency---though, as documented extensively in the empirical finance literature, equal-weight strategies often outperform optimized portfolios out-of-sample due to their immunity to estimation error.
+
+![Mean-variance efficient frontier with optimal portfolios. Left panel shows our reproduced results; right panel displays Figure 4 from Carta & Conversano (2020). The Kelly portfolio (red square) lies beyond the Tangent portfolio (blue diamond) on the efficient frontier, reflecting its objective of maximizing geometric growth rather than the Sharpe ratio. The Minimum Variance portfolio (orange circle) anchors the frontier's left edge, while the Equal Weight portfolio (black square) lies inside the frontier, indicating suboptimal mean-variance efficiency.](figures/In-Sample%20EuroStoxx%2050.jpg){#fig-efficient-frontier width="88%"}
+
+**Cumulative Wealth Paths.** @fig-eurostoxx-cumulative displays in-sample cumulative wealth trajectories for all four strategies over the 2000--2018 period. The Kelly portfolio dramatically outperforms all alternatives, achieving terminal wealth of approximately $15\times$ initial capital. The Tangent portfolio follows with roughly $11\times$ terminal wealth, while Minimum Variance and Equal Weight deliver modest, stable growth of approximately $3\times$.
+
+![In-sample cumulative wealth paths for EuroStoxx 50 portfolios (2000--2018). Left panel shows our reproduced results; right panel displays Figure 5 from Carta & Conversano (2020). The Kelly portfolio achieves the highest terminal wealth (approximately $15\times$), followed by the Tangent portfolio (approximately $11\times$). Minimum Variance and Equal Weight portfolios deliver more modest but stable growth (approximately $3\times$). Both panels exhibit qualitatively similar patterns, with Kelly's outperformance accelerating during bull market periods.](figures/In-Sample%20EuroStoxx%2050%20Part%203.jpg){#fig-eurostoxx-cumulative width="95%"}
+
+**Interpretation.** The in-sample results confirm Kelly's theoretical superiority for long-horizon wealth accumulation when parameters are known. However, several caveats temper this conclusion. First, these results use full-period parameter estimates applied retrospectively; out-of-sample performance typically shows significant degradation for optimized strategies. Second, the Kelly portfolio's extreme concentration in two assets exposes it to idiosyncratic shocks that diversified portfolios would mitigate. Third, Kelly weights scale linearly with expected returns and inversely with variance, meaning small estimation errors in $\boldsymbol{\mu}$---which is notoriously difficult to estimate accurately---can produce dramatically different allocations. Finally, while terminal wealth favors Kelly, drawdown analysis would reveal whether its superior endpoint justifies potentially severe intermediate losses.
+
+### Comparison with Original Paper
+
+Our reproduced results align qualitatively with Carta and Conversano (2020) across both the single-equity and multi-asset analyses. @tbl-replication-comparison summarizes key points of agreement and divergence.
+
+: Comparison of Reproduced Results with Carta & Conversano (2020) {#tbl-replication-comparison}
+
+| **Feature** | **Agreement** | **Notes** |
+|-------------|---------------|-----------|
+| *Single-Equity (Banca Intesa)* | | |
+| Strategy ranking by terminal wealth | ✓ | Full > Half > Triple > Buy&Hold |
+| Triple Kelly drawdown severity | ✓ | Both show >60% max drawdown |
+| Half Kelly risk-return tradeoff | ✓ | Competitive return, lower volatility |
+| Absolute metric values | ✗ | Data source differences |
+| *Multi-Asset (EuroStoxx 50)* | | |
+| Kelly portfolio outperformance | ✓ | Highest terminal wealth in both |
+| Portfolio concentration pattern | ✓ | Kelly more concentrated than Tangent |
+| Efficient frontier positioning | ✓ | Kelly beyond Tangent on frontier |
+| Exact portfolio constituents | ✗ | Different due to data availability |
+
+The primary sources of quantitative divergence include: (1) data vendor differences between Yahoo Finance and the original study's data provider; (2) treatment of corporate actions, dividends, and ticker changes; (3) exact universe composition due to delisted or renamed securities; and (4) numerical optimization tolerances and regularization choices. Despite these differences, the core findings---that Kelly maximizes in-sample wealth but with increased risk, that fractional Kelly offers a practical compromise, and that over-betting produces catastrophic outcomes---are robustly reproduced.
+
+### Summary
+
+The empirical backtest results validate the theoretical predictions established in our Monte Carlo analysis. In the single-equity setting, Full Kelly achieves optimal long-run growth while Half Kelly provides a more stable path with competitive returns. Triple Kelly confirms the dangers of over-betting, suffering severe drawdowns despite its aggressive positioning. In the multi-asset setting, Kelly portfolios dominate classical benchmarks in terminal wealth but exhibit concerning concentration and estimation sensitivity. These in-sample results establish important baselines, but the true test of Kelly's practical utility lies in out-of-sample performance, which we examine in @sec-oos-testing.
+
+## Out-of-Sample Portfolio Testing {#sec-oos-testing}
+
+This section evaluates the *out-of-sample* performance of Kelly-based portfolio strategies relative to classical benchmarks. While earlier sections validated the theoretical framework and successfully replicated the in-sample findings of Carta and Conversano (2020), the experiments presented here focus explicitly on generalization, robustness, and practical viability when portfolios are deployed on unseen data.
+
+We distinguish carefully between:
+
+- **Replication results**, consisting of constrained EuroStoxx 50 portfolios closely aligned with the original paper; and
+- **Extension results**, which include unconstrained EuroStoxx 50 portfolios and Dow Jones Industrial Average (DJIA) experiments not covered in the original study.
+
+This separation allows us to assess both the reproducibility of prior findings and the external validity of Kelly-based allocation rules beyond their original empirical setting.
+
+**Experimental Design and Evaluation Protocol**
+
+All out-of-sample experiments follow a rolling-window backtesting framework consistent with the earlier replication sections. Expected returns and covariance matrices are estimated using a fixed 24-month lookback window, updated monthly. Portfolio weights computed at the end of each estimation window are applied to the subsequent month's returns, ensuring a strictly forward-looking implementation.
+
+Performance is evaluated using cumulative wealth trajectories and summary statistics, including annualized return, volatility, and maximum drawdown. Because Kelly optimization targets long-run logarithmic growth rather than mean--variance efficiency, particular emphasis is placed on realized growth paths and tail behavior rather than Sharpe ratios alone.
+
+### Replication Results: Constrained EuroStoxx 50
+
+**Long-Only Kelly Under Realistic Constraints**
+
+The first out-of-sample experiment reproduces the constrained EuroStoxx 50 setting of Carta and Conversano (2020). Portfolios are restricted to be long-only, fully invested, and unlevered, such that weights satisfy:
+
+$$
+w_i \geq 0, \qquad \sum_{i=1}^N w_i = 1.
+$$
+
+These constraints reflect realistic regulatory and institutional limitations, but they also materially alter the theoretical Kelly solution, which is unconstrained in its original formulation.
+
+Consistent with the original study, we evaluate multiple Kelly fractions (half, full, double, and triple) alongside benchmark strategies, including buy-and-hold and the minimum-variance Markowitz portfolio.
+
+**Performance Characteristics**
+
+: Performance Metrics of Long-Only Constrained EuroStoxx 50 {#tbl-long-euro}
+
+|                      | Half Kelly | Full Kelly | MinVar    | Double Kelly | Triple Kelly |
+|----------------------|------------|------------|-----------|--------------|--------------|
+| Sharpe ratio         | 0.3582822  | 0.4275209  | 0.8169956 | 0.4275209    | 0.4275209    |
+| max drawdown         | 0.1970224  | 0.3520306  | 0.2065948 | 0.3520306    | 0.3520306    |
+| annual return        | 0.0473903  | 0.1077909  | 0.1245087 | 0.1077909    | 0.1077909    |
+| annual volatility    | 0.1322708  | 0.2521302  | 0.1523983 | 0.2521302    | 0.2521302    |
+| Sortino ratio        | 0.5175692  | 0.6192502  | 1.1727296 | 0.6192502    | 0.6192502    |
+
+::: {#fig-long-euro layout-ncol=2}
+![Long-Only Constrained EuroStoxx 50 Cumulative Returns](figures/euro_long_cumulative_return.png){#fig-long-euro-return}
+
+![Long-Only Constrained EuroStoxx 50 Performance Metrics](figures/euro_long_performance_bars.png){#fig-long-euro-perf-bars}
+
+Long-Only Constrained EuroStoxx 50 Results
+:::
+
+Out-of-sample results reveal a marked degradation in Kelly performance relative to in-sample outcomes. In contrast to the in-sample period—where Kelly portfolios dominated in terms of terminal wealth—the constrained Kelly strategies are consistently outperformed by the minimum-variance portfolio.
+
+This outcome reflects several interacting forces. First, estimation error in expected returns exerts a disproportionately large influence on Kelly weights, which scale linearly with $\mu$ but quadratically penalize variance only through the covariance matrix. Second, the long-only constraint truncates negative allocations, effectively forcing assets with negative estimated edges to receive zero weight rather than being shorted. As a result, Kelly portfolios frequently collapse into highly concentrated positions, often allocating nearly all capital to a single stock with a transiently high estimated mean return.
+
+**Kelly Fraction Invariance Under Constraints**
+
+::: {#fig-long-euro-asset layout-ncol=3}
+![Constrained EuroStoxx Half-Kelly Asset Allocations](figures/euro_long_halfkelly_bars.png)
+
+![Constrained EuroStoxx Full-Kelly Asset Allocations](figures/euro_long_fullkelly_bars.png)
+
+![Constrained EuroStoxx MinVar Asset Allocations](figures/euro_long_minvar_bars.png)
+
+Constrained EuroStoxx Asset Allocations
+:::
+
+An additional empirical regularity emerges: under long-only constraints, the distinction between full, double, and triple Kelly becomes largely irrelevant. Because the portfolio must remain fully invested and cannot borrow, scaling the Kelly fraction above one does not meaningfully change the feasible solution. As a result, multiple Kelly variants converge to nearly identical allocations and exhibit indistinguishable performance.
+
+This phenomenon underscores a key limitation of constrained Kelly optimization: once leverage and shorting are removed, the defining characteristics of Kelly scaling are suppressed. In this setting, Kelly ceases to function as a growth-optimal sizing rule and instead behaves as a highly unstable return-chasing allocator.
+
+### Extension Results: Unconstrained EuroStoxx 50
+
+**Relaxing Portfolio Constraints**
+
+We now extend the analysis by removing long-only and leverage constraints, allowing:
+
+$$
+\sum_{i=1}^N w_i \neq 1, \qquad w_i \in \mathbb{R}.
+$$
+
+This unconstrained setting aligns more closely with the theoretical Kelly solution derived earlier and permits both short positions and borrowing against low-risk assets.
+
+: Performance Metrics of Unconstrained EuroStoxx 50 {#tbl-unconstr-euro}
+
+|                     | Half Kelly | Full Kelly | Double Kelly | Triple Kelly |
+|---------------------|------------|------------|--------------|--------------|
+| Sharpe ratio        | 0.3498372  | 0.4438290  | 0.5600583    | 0.5436902    |
+| max drawdown        | 0.5092188  | 0.6121561  | 0.6054593    | 0.6054593    |
+| annual return       | 0.1060948  | 0.1925451  | 0.2867091    | 0.2849221    |
+| annual volatility   | 0.3032689  | 0.4338273  | 0.5119271    | 0.5240524    |
+| Sortino ratio       | 0.4922105  | 0.6261235  | 0.8092267    | 0.7865292    |
+
+**Impact on Allocation Structure**
+
+::: {#fig-euro-assets layout-ncol=2}
+![Unconstrained EuroStoxx Half-Kelly Asset Allocations](figures/euro_halfkelly_bars.png)
+
+![Unconstrained EuroStoxx Full-Kelly Asset Allocations](figures/euro_fullkelly_bars.png)
+
+Unconstrained EuroStoxx Asset Allocations
+:::
+
+Once constraints are removed, Kelly portfolios exhibit dramatically different behavior. Allocations feature both negative weights (short positions) and leverage levels exceeding 300% of initial capital in certain windows. Portfolio composition becomes significantly more diversified, with many more assets receiving nonzero weights relative to the constrained case.
+
+The distinction between Kelly fractions re-emerges clearly: higher Kelly multiples correspond to more aggressive leverage and increased exposure to estimation error. Half Kelly portfolios exhibit comparatively conservative leverage profiles, while full and double Kelly portfolios display substantial volatility amplification.
+
+**Performance Trade-Offs**
+
+::: {#fig-unconstr-euro layout-ncol=2}
+![Unconstrained EuroStoxx 50 Cumulative Returns](figures/euro_cumulative_return.png){#fig-euro-cumulative}
+
+![Unconstrained EuroStoxx 50 Performance Metrics](figures/euro_performance_bars.png){#fig-euro-perf-bars}
+
+Unconstrained EuroStoxx 50 Results
+:::
+
+Out-of-sample, unconstrained Kelly portfolios generate higher average returns than their constrained counterparts, confirming the theoretical prediction that Kelly's growth optimality relies fundamentally on unconstrained capital allocation. However, these gains come at the cost of extreme drawdowns and heightened tail risk.
+
+Double Kelly strategies, in particular, achieve the highest cumulative wealth but also experience the most severe interim losses. Full Kelly emerges as a compromise solution, delivering superior growth relative to half Kelly while avoiding the most extreme leverage-induced collapses observed under double and triple Kelly.
+
+These results reinforce a central insight of the Kelly literature: while the criterion is mathematically optimal under correct specification, its empirical performance is extraordinarily sensitive to estimation error when leverage is permitted.
+
+### Extension Results: Dow Jones Industrial Average
+
+**Kelly as a Position-Sizing Tool**
+
+The DJIA experiment serves as a robustness check rather than a direct replication. Because the Dow Jones index is treated as a single aggregated asset, Kelly optimization in this context functions purely as a position-sizing mechanism rather than a full portfolio construction framework.
+
+**Comparative Results**
+
+::: {#fig-dji layout-ncol=2}
+![Dow Jones Cumulative Returns](figures/dji_cumulative_return.png){#fig-dji-cumulative}
+
+![Dow Jones Performance Metrics](figures/dji_performance_bars.png){#fig-dji-perf-bars}
+
+Dow Jones Industrial Average Results
+:::
+
+Results display a stark contrast between constrained and unconstrained Kelly implementations. Under constraints, Kelly strategies deliver inferior risk-return profiles relative to buy-and-hold, confirming that Kelly sizing is counterproductive when leverage and shorting are prohibited. In the unconstrained setting, higher Kelly fractions achieve higher terminal wealth, but at the cost of substantial volatility and drawdowns.
+
+Among the variants, full Kelly again appears to offer the most favorable balance, delivering higher returns than half Kelly while avoiding the instability of over-levered strategies.
+
+# Discussion {#sec-discussion}
+
+## Implementation Challenges
+
+The application of Kelly-based strategies in actual financial markets is accompanied by many practical difficulties that limit to a great extent the theoretical charm of the strategy. Risk of parameter estimation is the main difficulty among the others. The allocations according to the Kelly criterion are based directly on the expected returns and covariances, and these inputs are very hard to estimate accurately. The process of estimating expected returns, for instance, needs long samples to reach statistical stability, but the use of long samples contradicts the assumption of stationarity. Even small errors in estimation that are well within the range of sampling variability can result in large distortions in the optimal weights because the Kelly fraction is directly proportional to mean return and inversely proportional to variance. This leads to a scenario in which misestimated means cause considerable overallocation while underestimated variance results in excessive leverage. In reality, the investors are hardly ever using estimates that are accurate enough to support the full exposure to the Kelly criterion.
+
+The second hurdle that investors face in the application of the Kelly criterion is related to transaction costs, turnover, and the liquidity issues of the market. Kelly strategies through their nature are very aggressive in the rebalancing process since they are highly affected by changes in the estimated parameters. Even minor changes in the means or variances of the samples can lead to significant changes in the portfolio weights which, in turn, increase the turnover. While the theoretical Kelly assumes trading without any costs, in reality, the market has the costs such as bid-ask spreads, slippage, brokerage fees, and market-impact costs. These kinds of frictions may eventually and even entirely neutralize the theoretical outperformance of Kelly strategies. What is more, it may be the case that investors dealing with leveraged or concentrated Kelly allocations have to face liquidity constraints, especially in the tough periods of the market when the spreads are wide and the execution quality is low.
+
+The issue of stability in implementation and reliability in numbers is another challenge that comes third. In high dimensions or during turbulent times, Kelly optimization runs into problems most of the time when it comes to ill-conditioned covariance matrices. When regularization is not present, the inversion of covariance can become unstable, resulting in either erratic weights or optimization failure. Numerical stability can thus only be maintained by practical implementations that use shrinkage estimators, dimension reduction, or constraints—corresponding choices that are not in agreement with the canonical Kelly framework.
+
+Ultimately, the behavioral and psychological aspects of Kelly investing have to be taken seriously. The portfolios that follow Kelly's method usually undergo substantial declines in their value and volatility and even miss out on a longer period of time when the market rewards the theoretically optimal. The majority of the investors do not find it easy to keep their faith through such ups and downs, especially when they have to bear the loss that is either too early or too frequent during the time. The psychological strain usually drives the investors away from being on the right path at the wrong time. Partly, the fractional Kelly strategies are able to take care of these issues by giving the investors the benefit of 'smoother' performance paths, but still, the psychological problem of large—a bit 'distressing' though—drawdowns that are considered under 'optimality' remains a major hurdle to the application of the fidelity method.
+
+## Comparison with Other Approaches
+
+Kelly-based strategies are fundamentally different from the classical portfolio construction methods, and the recognition of those differences helps us to a better understanding of the pros and cons of the Kelly method. Traditional mean-variance optimization, which is based on Markowitz's theory, looks for a combination of assets that either has the highest Sharpe ratio or the least variance for a certain level of expected return. Kelly is not about maximizing the long-run compounding explicitly and is only concerned about the return and volatility. Well, theoretically, the Kelly-optimal portfolio lies on the mean-variance frontier when shorting and borrowing are allowed but in practice, the mean-variance portfolios are generally more stable as they are less affected by the estimation error. The latter method inhibits the extreme risks in the allocation while the former supports them when the expected return estimates are high.
+
+On the other hand, equal-weight portfolios and naive diversification tactics inherit strength by shedding reliance on estimated parameters completely. Equal-weight portfolios frequently beat optimized allocations in reality precisely due to the fact that they fly over the opaque estimates of returns and covariances. Although they don't aim for highest growth or lowest risk in a straightforward manner, their straightforwardness and immunity to estimation errors render them very competitive in the ex-post evaluations. Kelly portfolios might win in perfect circumstances, but equal-weight strategies are usually ahead due to their stability and resilience.
+
+Contemporary approaches like risk parity, minimum tail-risk portfolios, and volatility-targeting strategies differ fundamentally in their orts. Risk parity's main principle is the equalization of risk which, in most cases, leads to less dramatic and more regular upside and downside performance. The minimum-tail-risk and drawdown-controlled portfolios are designed with the feature of downside-censoring in mind, which is a shortcoming of Kelly's growth-centered goal. The volatility-targeting systems, on the other hand, have a trait of being responsive to market conditions by adjusting the exposure accordingly, thus providing investors with a harder but smoother return path and lessening the occurrence of the downturns that are a problem for Kelly investors.
+
+Among these techniques, Kelly is the one that shines the most due to the solid theory it is based on and the very long-term growth it could possibly deliver when the conditions are right. Nevertheless, it is still the one that is most fragile: none of the other approaches does so much to boost estimation noise and structural instability. Fractional Kelly can be seen as a mediator between theory and practice. It maintains the brilliance of growth optimality but gets empirical results more in line with risk-managed strategies. Basically, the difference between Kelly and the other methods points to a wider issue in quantitative finance: the fight for theoretical best versus the need for stability against uncertainty in the real world.
+
+## Limitations and Future Research
+
+Despite the fact that our replication managed to successfully reflect the main qualitative findings of Carta and Conversano (2020), there are a number of substantive limitations that point out the difficulties that are unavoidable in empirical research delving into Kelly-based portfolio strategies. Such limitations not only played a role in our replication process but they also shed light on larger problems that the next generation of researchers will need to tackle in order to make Kelly implementations more transparent, reliable, and fit for the real world.
+
+A major drawback concerns the ambiguity of the data and inconsistencies between different vendors. Different public equity databases have different methods of treating corporate actions, dividend reinvestment, ticker changes, delistings, and survivorship bias. Our replication pipeline has shown that even tasks that appear to be simple—like waiting for the right historical ticker for a company or figuring out which adjusted-return series is linked with an index constituent—can lead to unavoidable subjectivity. A small difference in data selection will directly affect the estimated means and covariances, and this will be worsened by Kelly optimization, which is known to be very sensitive to the inputs. This implies that two researchers, who follow the same procedures but use slightly different datasets, might end up with significantly different portfolios and performance paths. This is not a drawback of our replication but rather a feature of optimization that is dependent on data and is operating at high leverage.
+
+The second restriction results from a black-box replication hurdle caused by hidden implementation choices. Kelly optimizers very much like to refer to numerical details which are rarely mentioned or even only briefly in academic papers: solver type and tolerances, covariance matrix conditioning, regularization strength, weight clipping rules, and handling singular or unstable covariance matrices. These choices might seem small and since they do not affect it directly; however, they still impact the portfolio weights significantly especially in long-only settings where corner solutions often exist. The case of Kelly-based studies is such that exact replication is practically impossible without total access to the data pipeline, the computational environment, and the optimization codes. This situation is similar to broader replication failures in empirical finance, where hidden computational choices often influence the results as much as or more than the conceptual methodology.
+
+The structural fragility of Kelly strategies in actual markets is the third limitation. The theoretical optimality of Kelly is based on the factors mentioned above. Stationarity, correct model specification, and reliable returns and covariances estimation are the assumptions that real financial environments violate. Regime shifts, volatility clustering, heavy-tailed distributions, and persistent drawdown risk all contribute to the instability of Kelly allocations. Even a small error in estimation could lead to extremely large weights, which would then exacerbate drawdowns or even cause total loss of capital—especially for leveraged fractions like Double or Triple Kelly. Our empirical study has shown that even though classical Kelly performs excellently in idealized Monte Carlo simulations, its real-world behavior is much less stable.
+
+A fourth constraint pertains to market frictions and transaction costs, which we have not taken into consideration in this research. Kelly portfolio usually undergoes heavy and frequent rebalancing due to its parameter shift sensitivity, and thus, transaction cost models that are more realistic than the current one could greatly diminish the "theoretical advantage". Additionally, over-the-counter and liquidity constraints may lead investors not to be able to use the optimal Kelly fraction in practice particularly in the case of volatile or illiquid markets.
+
+In a forward-looking perspective, there are indeed several avenues of research that, if pursued, could significantly improve the robustness and practical applicability of Kelly strategies. One way forward is to develop regularized or Bayesian formulations of Kelly, for instance, by using shrinkage estimators like Ledoit–Wolf, OAS, or Bayesian predictive distributions. Such approaches may help in the stabilization of noisy input estimates. Moreover, one could also apply Kelly fractions that change with the volatility regimes, drawdown thresholds, or macroeconomic indicators. This way, the fixed‑fraction strategies' hypersensitivity will be significantly lessened. Besides that, The Kelly strategy is very much mathematically sound and strategically valid if transaction costs, liquidity limitations, and realistic leverage constraints are all factored in. Further research might widen the scope of the method to involve cross‑asset portfolios comprising of bonds, commodities, FX, and crypto; thereby testing the universal applicability of Kelly dynamics. Lastly, stress-testing under past crisis conditions and comparing against modern methods—such as risk parity, minimum‑tail‑risk portfolios, or machine-learning‑based forecasting—could really help in understanding the circumstances under which Kelly rules provide a plus and when their weakness dominates.
+
+The various limitations discussed so far provide a common principal: portfolio optimization is always very much data and implementation choices dependent and Kelly is the method that takes most out of this sensitivity. Our research, through a clear and flexible research pipeline, is trying to tackle the problem from this side. Nevertheless, the openness of the method, use of robustness techniques and realistic market modeling must be the top priorities in future research as these are the tools needed to get a true picture of the practical applicability of Kelly‑based strategies.
+
+## Implications for Practitioners
+
+The current findings imply that the Kelly Criterion is not a portfolio construction rule for the whole and sole purpose of being a criterion but a position-sizing scheme whose success is largely determined by the quality of the estimation, the type of the market, and the implementation constraints. Although the Kelly optimization provides a theoretically great solution for long-term geometric growth in a perfect scenario, the investors in the real world are facing an uncertain environment defined by parameters, transaction costs, limits on leverage, and human behavior that constrains them. Under such conditions, the untrained usage of the whole Kelly allocation is unlikely to be strong and could cause the portfolio to experience high drawdowns and instability.
+
+The most acceptable use of the Kelly method for the practitioners is in conservative, risk-managed implementations. Fractional Kelly strategies offer a practical compromise by keeping the directional growth advantage of Kelly while significantly lowering volatility and the risk of drawdowns. Regularization techniques, for example, shrinkage of return and covariance estimates, enhance robustness by narrowing sensitivity to noisy inputs and preventing extreme concentration further. These changes enable Kelly to change from a fragile optimizer to a disciplined sizing heuristic that is in line with a larger framework for constructing portfolios.
+
+Additionally, our research indicates that institutional limitations are of paramount importance in determining the outcomes of Kelly. In the case of long-only, fully invested portfolios, the direct Kelly amounts often lead to positions that are heavily invested in return-chasing and thus the growth optimality benefits are compromised theoretically. On the other hand, the unconstrained environments do allow for the return of Kelly's structure but this at a hefty price of utilizing huge leverage and tail risk. Thus, the users of Kelly should reconsider it as being one ingredient in an extensive risk management system rather than a complete remedy. In real-world situations, the use of Kelly is mainly seen when it is backed up with rules of diversification, limits to leverage, drawdown controls, and realistic estimates of transaction costs.
+
+In the end, the Kelly Criterion's main attraction is its very clear concept: it puts the trade-off between risk and growth in one goal. But this same clarity also points out its weaknesses. When used with caution, such as by fractional scaling, regularization, and operational safeguards, Kelly can guide the intelligent allocation of capital. On the other hand, when used mechanically or aggressively, it can likely double the errors in estimation and the noise in the market. The lesson learned in practice is not to stop using Kelly but to use it tenderly, taking along with it the uncertainty that is inherent in the financial markets.
+
+# Conclusion {#sec-conclusion}
+
+The Kelly Criterion is the main avenue in quantitative finance as it gives a highly theoretical optimal rule for maximizing long-run geometric growth under risk. It is attractive due to the fact that it is mathematically elegant: if there are correct predictions of expected returns and covariances, Kelly will identify the single allocation that accumulates wealth at the quickest possible rate. Nevertheless, this power also uncovers the weakness of the Kelly criterion—its extreme dependence on the precision of those predictions. Our research aimed to determine this conflict by thoroughly reproducing and building on the study of Carta and Conversano (2020) via a clear, modular research pipeline that distinguishes theoretical behavior from empirical realities.
+
+Replicating our results has shown a uniform and logical story not only in simulated but also in real-market situations. This is particularly evident from Monte Carlo simulations, where all the assumptions about distribution are satisfied and Kelly's behavior is in full accordance with the theory. The full Kelly is the best in terms of long-term median growth, and the fractional Kelly compromises very little in terms of performance for getting a lot in stability, while over-leveraged ones have very high dispersion in wealth paths and high risk of ruin. By doing this first-principles replication so successfully, the theoretical model and our simulation framework were both validated.
+
+In actual markets, the situation is more intricate. Our in-sample EuroStoxx 50 replication and the single-asset Banca Intesa analysis, even though there are unavoidable data inconsistencies, are still very much in line with the qualitative patterns described in the original paper. Kelly portfolios produce greater terminal wealth but, at the same time, they are also very volatile and subject to deep drawdowns. On the other hand, fractional Kelly continuously offers stability along with meaningful growth. The findings indicate that the initial relationships can withstand considerable variations in the data and are also very well replicated using the limitations of available public datasets.
+
+The analysis of Dow Jones outside the sample further deepens our discoveries by revealing the weakness of Kelly in situations with estimation errors and changes in structure. The qualitative connections have not been altered but the performance has dropped when the new markets, new timeframes, and new regimes are considered. This result strengthens one of the main ideas of our research: the theoretical strength of Kelly does not mean practical reliability unless the basic estimates are stable and the market environment is similar to the model's idealized assumptions. The gap between theory and practice is not a failure of Kelly but rather the result of applying a very sensitive optimization framework to noisy and developing financial data.
+
+The outcomes we have obtained, when combined, display three main lessons in particular. To begin with, the theoretical foundations of Kelly are indeed firm and reproducible in a controlled environment. Secondly, the empirical replication is, in a way, a struggle against the ambiguities in the data and the undisclosed methodological choices, thus cannot avoid being dependent on qualitative consistency more than on numerical precision. Lastly, fractional and regularized versions of Kelly, in the context of real financial markets, provide the most ideal trade-off between growth and robustness thus being able to win over unconstrained full-Kelly implementations with respect to risk-adjusted stability.
+
+In the end, our research points to the fact that the Kelly Criterion is a tool with both potential and restrictions in practical portfolio management. The theoretical insights showing how they last between the different types of markets and simulations and when they are no longer valid are what this research is about. Kelly's practical feasibility is better understood through our study. Our open research process and organized evaluation support and prepare for future research that is developing Kelly-based strategies that are more stable, understandable, and easier to implement and that connect beautiful theory with everyday financial practice. Thus, our replication not only elucidates the distinction between Kelly theory and real-world observation but also provides the basis for more open, strong, and realistically applicable techniques for the growth-optimal portfolio construction.
+
+{{< pagebreak >}}
+
+# References {.unnumbered}
+
+1. A. Carta and C. Conversano, *On the Use of the Kelly Criterion in Portfolio Optimization*, European Journal of Operational Research, vol. 282, no. 3, pp. 1119--1132, 2020.
+
+2. H. Markowitz, *Portfolio Selection*, Journal of Finance, vol. 7, no. 1, pp. 77--91, 1952.
+
+3. L. M. Rotando and E. O. Thorp, *The Kelly Criterion and the Stock Market*, American Mathematical Monthly, vol. 99, no. 10, pp. 922--931, 1992.
+
+4. J. H. Kim, *Regime-Dependent Kelly Criterion with Volatility Targeting*, Journal of Portfolio Management, vol. 50, no. 2, pp. 112--130, 2024.
