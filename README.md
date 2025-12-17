@@ -36,10 +36,6 @@ kelly-criterion-portfolio/
 - **Quarto / R Markdown** — Reproducible documents
 - **LaTeX / Beamer** — Presentation formatting
 
-## Authors
-
-- [Syed Bashir Hydari](https://github.com/syedhydari) | Agna Chan | Pranav Kasibhatla | Aniqa Nayim
-
 ## Acknowledgments
 
 - Professor Zhuo for consultation and OOS replication on Dow Jones
